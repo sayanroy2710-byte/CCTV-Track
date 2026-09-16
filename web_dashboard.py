@@ -12,6 +12,8 @@ import streamlit as st
 from datetime import datetime
 from PIL import Image
 
+import sys
+import subprocess
 import config
 
 st.set_page_config(
@@ -73,6 +75,35 @@ st.sidebar.markdown("---")
 st.sidebar.markdown(f"**Database:** `{config.DATABASE_PATH.name}`")
 st.sidebar.markdown(f"**ReID Backbone:** `{config.REID_BACKBONE}`")
 st.sidebar.markdown(f"**ReID Threshold:** `{config.REID_SIMILARITY_THRESHOLD}`")
+
+# Video Selection & Processing Section
+st.sidebar.markdown("---")
+with st.sidebar.expander("📹 Select & Track Video", expanded=False):
+    st.markdown("**Run AI Tracking on New Video**")
+    uploaded_vid = st.file_uploader("Upload video file (.mp4, .avi, .mov)", type=["mp4", "avi", "mov", "mkv"])
+    if uploaded_vid is not None:
+        target_path = config.VIDEO_DIR / uploaded_vid.name
+        with open(target_path, "wb") as f:
+            f.write(uploaded_vid.getbuffer())
+        st.success(f"Uploaded: {uploaded_vid.name}")
+        if st.button("▶ Run AI Tracking on This Video"):
+            with st.spinner("Processing video through YOLO11 & Deep ReID..."):
+                cmd = [sys.executable, "main.py", "--sources", str(target_path), "--headless"]
+                subprocess.run(cmd, cwd=str(config.BASE_DIR))
+            st.success("Tracking complete! Reloading database...")
+            st.rerun()
+
+    # Select existing local video
+    existing_videos = list(config.VIDEO_DIR.glob("*.mp4")) + list(config.VIDEO_DIR.glob("*.avi"))
+    if existing_videos:
+        vid_names = [v.name for v in existing_videos]
+        chosen_vid = st.selectbox("Or choose existing sample video:", vid_names)
+        if st.button("▶ Track Selected Sample Video"):
+            with st.spinner("Processing sample video..."):
+                cmd = [sys.executable, "main.py", "--sources", str(config.VIDEO_DIR / chosen_vid), "--headless"]
+                subprocess.run(cmd, cwd=str(config.BASE_DIR))
+            st.success("Tracking complete! Reloading database...")
+            st.rerun()
 
 # Header
 st.title("🏬 Public CCTV Intelligence & People Tracking")

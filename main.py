@@ -77,6 +77,10 @@ def parse_args():
                         help="Run without displaying a GUI window (faster for batch/server)")
     parser.add_argument("--max-frames", type=int, default=None,
                         help="Maximum frames to process before exiting (default: process until end of video)")
+    parser.add_argument("--gui", action="store_true", default=False,
+                        help="Force display of graphical video selector dialog")
+    parser.add_argument("--no-gui", action="store_true", default=False,
+                        help="Bypass GUI file selector and use default sample video")
     parser.add_argument("--output", type=str, default=None,
                         help="Output filename for the tracked video")
     return parser.parse_args()
@@ -108,6 +112,23 @@ def build_camera_streams(sources: Optional[List[str]], demo: bool, loop: bool) -
 
 def main():
     args = parse_args()
+    
+    # Launch GUI video selector dialog if no sources provided and not in headless/no-gui mode
+    if (args.sources is None and not args.headless and not args.no_gui) or args.gui:
+        try:
+            from ui.video_selector_gui import launch_video_selector_gui
+            gui_cfg = launch_video_selector_gui()
+            if gui_cfg is None:
+                print("[INFO] Video selection was cancelled by user. Exiting cleanly.")
+                return
+            args.sources = gui_cfg.get("sources", args.sources)
+            args.demo = gui_cfg.get("demo", args.demo)
+            args.loop = gui_cfg.get("loop", args.loop)
+            args.model = gui_cfg.get("model", args.model)
+            args.conf = gui_cfg.get("conf", args.conf)
+        except Exception as e:
+            print(f"[WARNING] Could not open GUI selector ({e}). Proceeding with default configuration.")
+
     print("=" * 74)
     print("       UNIVERSAL CCTV MULTI-CAMERA PEOPLE TRACKING & ReID SYSTEM       ")
     print("=" * 74)

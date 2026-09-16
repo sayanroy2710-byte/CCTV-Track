@@ -1,4 +1,4 @@
-﻿# Virtual Environments (DO NOT UPLOAD TO GITHUB)
+# Virtual Environments (DO NOT UPLOAD TO GITHUB)
 C_Yolo/
 venv/
 env/
@@ -25,6 +25,10 @@ __pycache__/
 # Processed Video Outputs (Keep directory structure, ignore huge recordings)
 output_videos/*
 !output_videos/.gitkeep
+
+# User-added large video files (preserve default sample vid1.mp4)
+video/*
+!video/vid1.mp4
 
 # Experiment Runs & YOLO Cache
 runs/

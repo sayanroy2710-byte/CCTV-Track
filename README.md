@@ -10,13 +10,14 @@ It automatically records **exact entry and exit timestamps**, calculates **dwell
 
 No complex setup needed. Use the pre-configured Windows batch files:
 
-### 1. Start Live CCTV Tracking Window
-Double-click **`run_live_tracking.bat`**  
+### 1. Start Live CCTV Tracking (With Graphical Video Selector)
+Double-click **`run_live_tracking.bat`** *(or `select_video_and_track.bat`)*  
 *(or run in terminal:* `.\C_Yolo\Scripts\python.exe main.py`*)*
 
-- Opens a high-resolution window with the CCTV video on the left and the real-time analytics dashboard on the right.
-- Saves the tracked video output automatically to `output_videos/`.
-- Press **`q`** or **`ESC`** at any time to exit and finalize the recording.
+- **Interactive GUI Dialog**: Automatically prompts you to browse and select any video file (`.mp4`, `.avi`, `.mkv`), pick multiple videos for a multi-camera grid, or click 1 button to use the default sample video!
+- **Real-Time Live HUD**: Once selected, opens the high-resolution tracking window with synchronized live analytics.
+- **Saves Output**: The processed video with bounding boxes and live HUD is automatically saved to `output_videos/`.
+- Press **`q`** or **`ESC`** on the video window at any time to quit and finalize the recording.
 
 ### 2. Open Web Administrator Portal
 Double-click **`run_web_dashboard.bat`**  
