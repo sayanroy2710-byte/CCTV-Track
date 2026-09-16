@@ -58,3 +58,11 @@ test*
 .idea/
 *.sublime-project
 *.sublime-workspace
+
+# PDF, PNG, and HTML files (preserved locally, excluded from GitHub)
+*.pdf
+**/*.pdf
+*.png
+**/*.png
+*.html
+**/*.html
