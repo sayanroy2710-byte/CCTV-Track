@@ -226,7 +226,8 @@ class JourneyManager:
             ))
             conn.commit()
 
-    def get_summary_metrics(self) -> Dict[str, Any]:
+    def get_summary_metrics(self, current_time: Optional[datetime] = None,
+                            live_camera_counts: Optional[Dict[str, int]] = None) -> Dict[str, Any]:
         total_entered = len(self.active_visitors) + len(self.completed_visitors)
         currently_present = len(self.active_visitors)
         total_exited = len(self.completed_visitors)
@@ -235,11 +236,20 @@ class JourneyManager:
         for cam_id in config.DEFAULT_CAMERAS.keys():
             camera_counts[cam_id] = 0
             
-        for record in self.active_visitors.values():
-            if record.last_camera in camera_counts:
-                camera_counts[record.last_camera] += 1
-            else:
-                camera_counts[record.last_camera] = 1
+        if live_camera_counts is not None:
+            for cam_id, cnt in live_camera_counts.items():
+                camera_counts[cam_id] = cnt
+        elif current_time is not None:
+            for record in self.active_visitors.values():
+                elapsed = (current_time - record.last_seen_time).total_seconds()
+                if elapsed <= 2.0:
+                    camera_counts[record.last_camera] = camera_counts.get(record.last_camera, 0) + 1
+        else:
+            for record in self.active_visitors.values():
+                if record.last_camera in camera_counts:
+                    camera_counts[record.last_camera] += 1
+                else:
+                    camera_counts[record.last_camera] = 1
                 
         if self.completed_visitors:
             avg_dwell = sum(v.dwell_time_seconds for v in self.completed_visitors.values()) / len(self.completed_visitors)

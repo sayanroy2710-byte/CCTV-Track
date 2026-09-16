@@ -130,18 +130,26 @@ class SideDashboardRenderer:
                 entry_str = rec.entry_time.strftime("%H:%M:%S")
                 dwell_str = rec.dwell_time_str
                 
+                # Check if visitor is currently visible or temporarily occluded
+                elapsed = (current_time - rec.last_seen_time).total_seconds()
+                is_live = elapsed <= 2.0
+                
                 # Global ID
+                id_col = config.ACCENT_CYAN if is_live else (160, 165, 175)
                 cv2.putText(panel, rec.global_id, (20, y_cursor),
-                            self.font, 0.40, config.ACCENT_CYAN, 1, cv2.LINE_AA)
+                            self.font, 0.40, id_col, 1, cv2.LINE_AA)
                 # Entry Time
                 cv2.putText(panel, entry_str, (125, y_cursor),
-                            self.font, 0.38, config.TEXT_WHITE, 1, cv2.LINE_AA)
-                # Last Camera
-                cv2.putText(panel, rec.last_camera, (220, y_cursor),
-                            self.font, 0.38, config.TEXT_MUTED, 1, cv2.LINE_AA)
+                            self.font, 0.38, config.TEXT_WHITE if is_live else config.TEXT_MUTED, 1, cv2.LINE_AA)
+                # Last Camera / Status
+                cam_str = rec.last_camera if is_live else f"{rec.last_camera} (Occl)"
+                cam_col = config.TEXT_MUTED if is_live else (130, 140, 160)
+                cv2.putText(panel, cam_str, (220, y_cursor),
+                            self.font, 0.36 if not is_live else 0.38, cam_col, 1, cv2.LINE_AA)
                 # Dwell
+                dwell_col = config.ACCENT_GREEN if is_live else (120, 170, 130)
                 cv2.putText(panel, dwell_str, (325, y_cursor),
-                            self.font, 0.38, config.ACCENT_GREEN, 1, cv2.LINE_AA)
+                            self.font, 0.38, dwell_col, 1, cv2.LINE_AA)
                             
         # 5. Live Activity Event Ticker (at the bottom)
         ticker_y = max(y_cursor + 28, height - 120)

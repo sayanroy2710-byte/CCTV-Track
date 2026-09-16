@@ -38,6 +38,8 @@ runs/
 data/*.db
 data/*.sqlite
 data/*.sqlite3
+data/*.jpg
+data/*.jpeg
 data/person_crops/*
 !data/person_crops/.gitkeep
 

@@ -249,7 +249,10 @@ def main():
                 cam_canvas = np.vstack([top_row, bot_row])
                 
             # Render Side Dashboard Panel
-            metrics = tracker.journey_manager.get_summary_metrics()
+            metrics = tracker.journey_manager.get_summary_metrics(
+                current_time=sim_time,
+                live_camera_counts=tracker.live_camera_counts
+            )
             dashboard_panel = dashboard_renderer.render(
                 height=cam_canvas.shape[0],
                 metrics=metrics,

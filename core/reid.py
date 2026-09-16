@@ -130,12 +130,12 @@ class PersonMemory:
             dist = np.hypot(dx, dy)
             
             # Trajectory continuity across brief occlusions (e.g. walking behind counters/pillars)
-            if dt < 45:
-                if dist < 80:
+            if dt < 90:
+                if dist < 100:
+                    return raw_sim + 0.22, raw_sim
+                elif dist < 320 and abs(dy) < 80:  # Walking horizontally across background
                     return raw_sim + 0.20, raw_sim
-                elif dist < 220 and abs(dy) < 60:  # Walking horizontally across background
-                    return raw_sim + 0.18, raw_sim
-            elif dt > 120 and dist > 300:
+            elif dt > 160 and dist > 300:
                 return raw_sim - 0.15, raw_sim
                 
         return raw_sim, raw_sim
