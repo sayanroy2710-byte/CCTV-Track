@@ -240,9 +240,12 @@ class VideoSelectorGUI:
         lbl_mod = tk.Label(grid, text="Detection Model:", bg="#1e293b", fg="#cbd5e1", font=("Segoe UI", 9))
         lbl_mod.grid(row=0, column=0, sticky="w", pady=4, padx=(0, 6))
 
-        self.model_var = tk.StringVar(value=config.YOLO_MODEL_PATH)
-        models = [config.YOLO_MODEL_PATH, "yolo11n.pt", "yolo11l.pt"]
-        self.combo_model = ttk.Combobox(grid, textvariable=self.model_var, values=models, state="readonly", width=18)
+        default_model_name = os.path.basename(config.YOLO_MODEL_PATH)
+        self.model_var = tk.StringVar(value=default_model_name)
+        models = ["yolo11m.pt", "yolo11n.pt", "yolo11l.pt"]
+        if default_model_name not in models:
+            models.insert(0, default_model_name)
+        self.combo_model = ttk.Combobox(grid, textvariable=self.model_var, values=models, state="readonly", width=14)
         self.combo_model.grid(row=0, column=1, sticky="w", pady=4, padx=(0, 20))
 
         lbl_conf = tk.Label(grid, text="Confidence Gate:", bg="#1e293b", fg="#cbd5e1", font=("Segoe UI", 9))
@@ -323,11 +326,18 @@ class VideoSelectorGUI:
                 return
             sources = [val]
 
+        selected_model = self.model_var.get().strip()
+        if not os.path.isabs(selected_model):
+            cand = config.BASE_DIR / selected_model
+            model_path = str(cand) if cand.exists() else selected_model
+        else:
+            model_path = selected_model
+
         self.result = {
             "sources": sources,
             "demo": self.demo_var.get(),
             "loop": self.loop_var.get(),
-            "model": self.model_var.get(),
+            "model": model_path,
             "conf": float(self.conf_var.get()),
             "exit_timeout": float(self.timeout_var.get()),
         }
