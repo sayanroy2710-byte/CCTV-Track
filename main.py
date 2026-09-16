@@ -127,7 +127,26 @@ def main():
             args.model = gui_cfg.get("model", args.model)
             args.conf = gui_cfg.get("conf", args.conf)
         except Exception as e:
-            print(f"[WARNING] Could not open GUI selector ({e}). Proceeding with default configuration.")
+            print(f"[WARNING] Rich GUI selector encountered an issue: {e}")
+            print("[INFO] Launching fallback Windows file selector...")
+            try:
+                import tkinter as tk
+                from tkinter import filedialog
+                root = tk.Tk()
+                root.withdraw()
+                picked = filedialog.askopenfilename(
+                    title="Select Video to Track - AI CCTV Tracking",
+                    filetypes=[("Video Files", "*.mp4 *.avi *.mov *.mkv *.wmv"), ("All Files", "*.*")]
+                )
+                root.destroy()
+                if picked and picked.strip():
+                    args.sources = [picked.strip()]
+                else:
+                    print("[INFO] No video selected. Exiting cleanly.")
+                    return
+            except Exception as fb_err:
+                print(f"[WARNING] File selector error ({fb_err}). Exiting.")
+                return
 
     print("=" * 74)
     print("       UNIVERSAL CCTV MULTI-CAMERA PEOPLE TRACKING & ReID SYSTEM       ")

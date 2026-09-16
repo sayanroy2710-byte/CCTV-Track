@@ -252,8 +252,8 @@ class VideoSelectorGUI:
         self.spin_conf = ttk.Spinbox(grid, from_=0.15, to=0.80, increment=0.02, textvariable=self.conf_var, width=6)
         self.spin_conf.grid(row=0, column=3, sticky="w", pady=4)
 
-        check_row = tk.Frame(card, bg="#1e293b", padx=16, pady=(6, 12))
-        check_row.pack(fill="x")
+        check_row = tk.Frame(card, bg="#1e293b", padx=16, pady=6)
+        check_row.pack(fill="x", pady=(0, 6))
 
         self.demo_var = tk.BooleanVar(value=False)
         c_demo = tk.Checkbutton(check_row, text="Simulate 2-Camera Topology Demo (--demo)", variable=self.demo_var,
