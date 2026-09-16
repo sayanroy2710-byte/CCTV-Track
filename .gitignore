@@ -1,0 +1,56 @@
+﻿# Virtual Environments (DO NOT UPLOAD TO GITHUB)
+C_Yolo/
+venv/
+env/
+ENV/
+.venv/
+env.bak/
+venv.bak/
+
+# Python cache & bytecode
+__pycache__/
+*.py[cod]
+*.class
+*.pyc
+.pytest_cache/
+
+# Large Model Weights (Downloaded automatically by Ultralytics / scripts)
+*.pt
+*.pth
+*.onnx
+*.engine
+*.tflite
+*.weights
+
+# Processed Video Outputs (Keep directory structure, ignore huge recordings)
+output_videos/*
+!output_videos/.gitkeep
+
+# Experiment Runs & YOLO Cache
+runs/
+.ipynb_checkpoints/
+
+# Database files & Dynamic Crops
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+data/person_crops/*
+!data/person_crops/.gitkeep
+
+# Temporary & System Files
+.DS_Store
+Thumbs.db
+*.tmp
+*.temp
+.tempmediaStorage/
+.system_generated/
+.user_uploaded/
+arch_diagram_temp.html
+report_temp.html
+test*
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
