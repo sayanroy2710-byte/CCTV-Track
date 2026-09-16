@@ -81,6 +81,8 @@ def parse_args():
                         help="Force display of graphical video selector dialog")
     parser.add_argument("--no-gui", action="store_true", default=False,
                         help="Bypass GUI file selector and use default sample video")
+    parser.add_argument("--exit-timeout", type=float, default=config.EXIT_TIMEOUT_SECONDS,
+                        help=f"Inactivity timeout in seconds before marking a visitor as EXITED (default: {config.EXIT_TIMEOUT_SECONDS})")
     parser.add_argument("--output", type=str, default=None,
                         help="Output filename for the tracked video")
     return parser.parse_args()
@@ -126,6 +128,7 @@ def main():
             args.loop = gui_cfg.get("loop", args.loop)
             args.model = gui_cfg.get("model", args.model)
             args.conf = gui_cfg.get("conf", args.conf)
+            args.exit_timeout = gui_cfg.get("exit_timeout", getattr(args, "exit_timeout", config.EXIT_TIMEOUT_SECONDS))
         except Exception as e:
             print(f"[WARNING] Rich GUI selector encountered an issue: {e}")
             print("[INFO] Launching fallback Windows file selector...")
@@ -231,7 +234,7 @@ def main():
             ann_frames = tracker.process_camera_batch(batch_inputs, sim_time)
             
             # Check departure timeouts
-            tracker.journey_manager.check_timeouts(sim_time)
+            tracker.journey_manager.check_timeouts(sim_time, timeout_seconds=args.exit_timeout)
             
             # Compose Video Grid
             if num_cams == 1:

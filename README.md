@@ -141,7 +141,7 @@ REID_SIMILARITY_THRESHOLD = 0.70     # Cosine similarity threshold for matching 
 MAX_EXEMPLARS_PER_PERSON = 5         # Number of viewpoint photos kept in memory per person
 
 # 4. Exit Timeout
-EXIT_TIMEOUT_SECONDS = 12.0          # Seconds without detection before marking a person as EXITED
+EXIT_TIMEOUT_SECONDS = 15.0          # Seconds without detection before marking a person as EXITED
 
 # 5. Camera Topology
 DEFAULT_CAMERAS = {

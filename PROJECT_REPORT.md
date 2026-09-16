@@ -272,7 +272,7 @@ MAX_EXEMPLARS_PER_PERSON = 5           # Viewpoint diversity capacity
 REID_CROP_MIN_HEIGHT = 40              # Minimum crop resolution for feature extraction
 
 # Temporal Journey Management
-EXIT_TIMEOUT_SECONDS = 4.0             # Inactivity threshold for departure detection
+EXIT_TIMEOUT_SECONDS = 15.0            # Inactivity threshold for departure detection
 DASHBOARD_WIDTH = 420                  # Pixel width of synchronized side analytics panel
 ```
 

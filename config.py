@@ -40,7 +40,7 @@ DEFAULT_CAMERAS = {
 }
 
 # Timeout in seconds without detection before marked as exited
-EXIT_TIMEOUT_SECONDS = 4.0
+EXIT_TIMEOUT_SECONDS = 15.0
 
 # Display & UI Settings
 MAX_DISPLAY_HEIGHT = 720
