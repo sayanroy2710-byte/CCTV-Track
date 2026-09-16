@@ -1,183 +1,266 @@
-# 🏬 Multi-Camera CCTV People Tracking & Re-Identification System
+﻿# 🏬 AI-Based CCTV People Tracking & Dwell-Time Analytics System
 
-An enterprise-ready AI surveillance solution built with **YOLO11** and **Spatio-Temporal Deep Re-Identification (ReID)**. The system accurately tracks visitors across multiple CCTV cameras in public spaces, shopping malls, retail stores, and campuses.
-
-It automatically records **exact entry and exit timestamps**, calculates **dwell time**, generates a persistent **Global Person ID** (e.g., `Person-001`), renders an integrated **live side analytics dashboard HUD**, persists journeys into an **SQLite database**, and exports the synchronized processed video to disk.
+An enterprise-ready AI surveillance and video analytics solution built with **YOLO11** and **Spatio-Temporal Deep Person Re-Identification (ReID)**. The system accurately detects, tracks, and analyzes visitors across single or multi-camera CCTV setups in retail malls, commercial stores, transportation hubs, and smart facilities.
 
 ---
 
-## ⚡ Quick Start (1-Click Run)
-
-No complex setup needed. Use the pre-configured Windows batch files:
-
-### 1. Start Live CCTV Tracking (With Graphical Video Selector)
-Double-click **`run_live_tracking.bat`** *(or `select_video_and_track.bat`)*  
-*(or run in terminal:* `.\C_Yolo\Scripts\python.exe main.py`*)*
-
-- **Interactive GUI Dialog**: Automatically prompts you to browse and select any video file (`.mp4`, `.avi`, `.mkv`), pick multiple videos for a multi-camera grid, or click 1 button to use the default sample video!
-- **Real-Time Live HUD**: Once selected, opens the high-resolution tracking window with synchronized live analytics.
-- **Saves Output**: The processed video with bounding boxes and live HUD is automatically saved to `output_videos/`.
-- Press **`q`** or **`ESC`** on the video window at any time to quit and finalize the recording.
-
-### 2. Open Web Administrator Portal
-Double-click **`run_web_dashboard.bat`**  
-*(or run in terminal:* `.\C_Yolo\Scripts\streamlit.exe run web_dashboard.py`*)*
-
-- Opens the Streamlit web app in your browser at `http://localhost:8501`.
-- View visitor statistics, search any visitor by ID, inspect visual ReID crop thumbnails, and download CSV/Excel journey logs.
+## 🌟 Key Capabilities
+* **Interactive Graphical Launcher**: Easily browse and select any video file (`.mp4`, `.avi`, `.mov`, `.mkv`), configure multi-camera grids, or connect live RTSP/webcam feeds via an intuitive GUI.
+* **Persistent Cross-Camera ReID**: Preserves unique individual identities (e.g., `Person-001`) even through severe occlusions, viewpoint changes, and camera handovers using deep neural appearance embeddings (MobileNetV3) combined with 3-zone CIELAB spatial color signatures.
+* **Accurate Dwell-Time Analytics**: Automatically logs exact entry timestamps, real-time presence duration, departure events, and total dwell times.
+* **Configurable Exit Waiting Timer**: Prevents false departures due to temporary occlusions with an adjustable inactivity buffer (default: 15 seconds).
+* **Live Side Analytics Dashboard (HUD)**: Renders real-time Key Performance Indicators (Total Footfall, Active Count, Departures, Camera Occupancy, and Live Event Feeds) directly alongside the surveillance video stream.
+* **Historical Web Management Portal**: Includes a browser-based Streamlit dashboard for supervisors to inspect SQL visitor registries, query individual journey timelines, and download CSV/Excel reports.
 
 ---
 
-## 📖 How to Run for Any Video or Setup
+## 📋 System Prerequisites
 
-The system is fully generalized and can process any video file, multi-camera feeds, USB webcams, or IP network streams:
+Before starting, ensure you have:
+* **Operating System**: Windows 10/11, Ubuntu 20.04+, or macOS
+* **Python**: Version **3.10** or **3.11** (Recommended: Python 3.10.11)
+* **Git**: Installed and accessible in your command line
+* **Hardware**:
+  * **GPU (Recommended)**: NVIDIA GPU with CUDA support for real-time 30+ FPS tracking.
+  * **CPU (Supported)**: The system automatically falls back to multi-threaded CPU execution if no GPU is detected.
 
-### 1. Track Default CCTV Video
+---
+
+## 🚀 Step-by-Step Local Installation Guide
+
+Follow these steps to download and set up the project on your local machine:
+
+### Step 1: Clone the Repository
+Open your terminal (PowerShell, Command Prompt, or Bash) and clone the repository:
+
 ```bash
-.\C_Yolo\Scripts\python.exe main.py
-```
-
-### 2. Track Your Own Video File
-Provide the path to any `.mp4`, `.avi`, or `.mkv` file:
-```bash
-.\C_Yolo\Scripts\python.exe main.py --sources "C:\path\to\your_video.mp4"
-```
-
-### 3. Track Multiple Camera Feeds Simultaneously
-Provide multiple video files separated by space. The system creates a synchronized multi-camera grid:
-```bash
-.\C_Yolo\Scripts\python.exe main.py --sources "video/entrance.mp4" "video/hallway.mp4" "video/exit.mp4"
-```
-
-### 4. Multi-Camera Simulation Mode (Single Video Demo)
-Simulates two distinct camera viewpoints (`Cam-01: Entrance` and `Cam-02: Corridor`) from one video source:
-```bash
-.\C_Yolo\Scripts\python.exe main.py --demo
-```
-
-### 5. Live USB Webcams or RTSP Security Cameras
-Use camera indices (e.g., `0`, `1`) or RTSP network URLs:
-```bash
-# Webcam:
-.\C_Yolo\Scripts\python.exe main.py --sources 0
-
-# RTSP IP Camera Stream:
-.\C_Yolo\Scripts\python.exe main.py --sources "rtsp://admin:password@192.168.1.50:554/stream1"
-```
-
-### 6. Background / Headless Mode (Fast Batch Processing)
-Processes video without opening a display window (ideal for servers or maximum FPS):
-```bash
-.\C_Yolo\Scripts\python.exe main.py --headless --output "output_videos/my_tracked_result.mp4"
-```
-
-### 7. Continuous Looping
-Loop the video continuously for kiosk displays or presentations:
-```bash
-.\C_Yolo\Scripts\python.exe main.py --loop
+git clone https://github.com/sayanroy2710-byte/CCTV-Track.git
+cd CCTV-Track
 ```
 
 ---
 
-## 🧠 Key Features Explained
+### Step 2: Create a Python Virtual Environment
 
-| Feature | Description |
+It is strongly recommended to use an isolated virtual environment to prevent dependency conflicts.
+
+* **On Windows (PowerShell / CMD):**
+  ```powershell
+  python -m venv C_Yolo
+  .\C_Yolo\Scripts\activate
+  ```
+
+* **On Linux / macOS:**
+  ```bash
+  python3 -m venv C_Yolo
+  source C_Yolo/bin/activate
+  ```
+
+*(Once activated, your terminal prompt will display `(C_Yolo)`).*
+
+---
+
+### Step 3: Install Required Dependencies
+
+Upgrade `pip` and install all necessary packages from `requirements.txt`:
+
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+> **💡 GPU Acceleration Note (Optional but Recommended):**  
+> If you have an NVIDIA graphics card, install PyTorch with CUDA support for optimal performance:
+> ```bash
+> pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+> ```
+
+---
+
+### Step 4: Model Weights Auto-Download
+
+You **do not** need to search for or manually download model weights!  
+On the very first launch, the system automatically downloads the official Ultralytics YOLO11 weights (`yolo11m.pt`) and PyTorch MobileNetV3 feature extractor weights into the root folder.
+
+---
+
+## 🎮 How to Run the System
+
+### Option 1: 1-Click Launchers (Windows Users)
+
+If you are on Windows, you can simply double-click the pre-configured batch scripts in the project directory:
+
+1. **`run_live_tracking.bat`** or **`select_video_and_track.bat`**  
+   Opens the **Graphical Video Selector GUI**. Select your video and click **"Start Live CCTV Tracking"**.
+2. **`run_web_dashboard.bat`**  
+   Opens the browser-based **Streamlit Web Portal** at `http://localhost:8501`.
+
+---
+
+### Option 2: Running via Command Line (CLI)
+
+Ensure your virtual environment is active (`.\C_Yolo\Scripts\activate`), then run any of the following:
+
+#### 1. Interactive Graphical Launcher (Default)
+```bash
+python main.py
+```
+This launches the graphical selector dialog where you can browse video files, choose detection models, adjust confidence thresholds, and tune the exit timeout.
+
+#### 2. Process the Included Sample CCTV Video Directly
+```bash
+python main.py --no-gui
+```
+
+#### 3. Process Any Custom Video File
+Provide the file path to any `.mp4`, `.avi`, `.mov`, or `.mkv` video:
+```bash
+python main.py --sources "C:\path\to\your_video.mp4"
+```
+
+#### 4. Synchronized Multi-Camera Grid (Multiple Feeds)
+Pass multiple video files separated by space to simulate multiple CCTV cameras simultaneously:
+```bash
+python main.py --sources "video/entrance.mp4" "video/hallway.mp4" "video/exit.mp4"
+```
+
+#### 5. Simulated 2-Camera Topology (Single Video Demo)
+Splits a single video into two time-offset camera streams (`Cam-01: Entrance` and `Cam-02: Corridor`) to test cross-camera re-identification:
+```bash
+python main.py --demo
+```
+
+#### 6. Live USB Webcams or IP Security Cameras (RTSP)
+```bash
+# Connect local USB webcam:
+python main.py --sources 0
+
+# Connect network IP camera via RTSP stream:
+python main.py --sources "rtsp://admin:password@192.168.1.100:554/stream1"
+```
+
+#### 7. Headless Mode (Maximum FPS for Batch/Server Ingestion)
+Processes video in the background without rendering a window on screen (ideal for servers or maximum export speed):
+```bash
+python main.py --headless --sources "video/vid1.mp4" --output "output_videos/batch_output.mp4"
+```
+
+---
+
+### Option 3: Launching the Web Administrator Portal
+
+To explore real-time metrics, visitor search, dwell-time charts, and visitor crop galleries:
+
+```bash
+streamlit run web_dashboard.py
+```
+*(Automatically opens your default web browser at `http://localhost:8501`)*.
+
+---
+
+## 🖥️ Using the Graphical Video Selector GUI
+
+When `python main.py` runs, it presents a user-friendly launcher dialog:
+
+| Control | Description |
 | :--- | :--- |
-| **1. Entry Time Logging** | When a person first appears on any entrance camera, their exact arrival timestamp is recorded into SQLite. |
-| **2. Spatio-Temporal Deep ReID** | Combines deep neural network feature embeddings (MobileNetV3 GPU) with 3-Zone CIELAB clothing color distribution. People maintain their unique ID (e.g., `Person-001`) even if occluded, turned away, or moving across cameras. |
-| **3. Multi-Exemplar Gallery** | Stores up to 5 appearance viewpoints per person. When a visitor returns or walks past again, they match their existing ID instead of creating false new tracks. |
-| **4. Spatial Aspect-Ratio Filtering** | Rejects square non-human objects and shelf reflections (`h/w >= 1.15`, `min_height >= 40px`) while detecting all genuine pedestrians (both foreground and background). |
-| **5. Exit & Dwell Time Calculation** | Measures the exact duration a person spends inside the premises (`Dwell: 0m 45s`) and marks them as `EXITED` upon leaving. |
-| **6. Real-Time Side Dashboard HUD** | Built directly into the OpenCV display: displays active count, total footfall, exited count, camera occupancy, active visitor table, and real-time activity log. |
-| **7. Database & Snapshot Audit Trail** | Every visitor's entry, exit, camera hops, and best cropped photos are saved automatically to `data/`. |
+| **Single Video File** | Select and process a single surveillance camera video. |
+| **Multi-Camera Grid** | Add multiple video files to build a synchronized multi-camera view. |
+| **Live Webcam / RTSP** | Enter a camera index (e.g. `0`) or RTSP URL for live streaming. |
+| **Browse Video...** | Opens the standard file explorer to choose any video file on your computer. |
+| **Use Sample CCTV Video** | 1-click preset that immediately loads the built-in sample footage (`vid1.mp4`). |
+| **Detection Model** | Choose between `yolo11m.pt` (balanced default), `yolo11n.pt` (ultra-fast nano), or `yolo11l.pt` (high accuracy). |
+| **Confidence Gate** | Detection sensitivity threshold (default: `0.28`). |
+| **Exit Waiting Timer (s)** | Inactivity buffer duration before marking a visitor as exited (default: `15.0s`). |
+| **Simulate 2-Camera Topology** | Checkbox flag to activate multi-camera simulation (`--demo`). |
+| **Continuous Video Loop** | Checkbox flag to repeat playback continuously (`--loop`). |
+| **Start Live CCTV Tracking** | Green button to launch the live computer vision tracking engine. |
+| **Open Web Portal** | Blue button to launch the administrative browser dashboard. |
 
 ---
 
-## 📁 Project Directory Structure
+## ⌨️ Runtime Hotkeys & Controls
+
+While the live CCTV tracking window is running:
+* Press **`q`** or **`ESC`**: Stops processing cleanly, flushes all active journeys into SQLite, finalizes video recording, and exits.
+* **Window Resizing**: The OpenCV window is responsive and can be resized or maximized to fit your screen.
+
+---
+
+## 📂 Project Directory Structure
 
 ```
-CCTV People Tracking - Martian/
-├── config.py                 # Central configuration: thresholds, model paths, camera setup
-├── main.py                   # Main CLI executable & real-time tracking engine
-├── web_dashboard.py          # Streamlit web administrator portal
-├── custom_botsort.yaml       # Optimized tracker settings (BoT-SORT)
-├── run_live_tracking.bat     # 1-Click launcher for real-time tracking
-├── run_web_dashboard.bat     # 1-Click launcher for the web portal
+CCTV-Track/
+├── config.py                 # Central system parameters, paths, and thresholds
+├── main.py                   # Primary application entry point & tracking pipeline
+├── web_dashboard.py          # Streamlit administrative portal
+├── custom_botsort.yaml       # Tuned BoT-SORT multi-object tracking settings
+├── requirements.txt          # Python dependencies
+├── run_live_tracking.bat     # Windows 1-click launcher for CCTV tracking
+├── run_web_dashboard.bat     # Windows 1-click launcher for Web Portal
+├── select_video_and_track.bat# Windows 1-click launcher for Video Selector GUI
 │
 ├── core/
-│   ├── tracker.py            # Multi-camera detection, filtering, and tracking orchestrator
-│   ├── reid.py               # Deep ReID feature extraction & multi-exemplar memory bank
-│   └── journey_manager.py    # Entry/Exit logging, dwell time tracker & SQLite manager
+│   ├── tracker.py            # Multi-camera detector, aspect-ratio filter & tracker
+│   ├── reid.py               # Deep ReID feature extractor & multi-exemplar gallery
+│   └── journey_manager.py    # Dwell-time calculator, state machine & SQLite logger
 │
 ├── ui/
-│   └── dashboard.py          # Live side HUD renderer (KPI cards, active list, event feed)
+│   ├── dashboard.py          # Real-time side analytics HUD renderer (OpenCV)
+│   └── video_selector_gui.py # Tkinter graphical video input launcher
 │
 ├── data/
-│   ├── cctv_mall_tracking.db # SQLite database storing all visitor journeys & camera events
-│   └── person_crops/         # Cropped image thumbnails for every recognized person
+│   ├── cctv_mall_tracking.db # SQLite database storing visitors, dwell times & events
+│   └── person_crops/         # High-resolution image crops of tracked individuals
 │
-├── output_videos/            # Recorded processed video files (.mp4)
+├── output_videos/            # Recorded MP4 outputs with bounding boxes & side HUD
 └── video/
-    └── vid1.mp4              # Sample surveillance footage
+    └── vid1.mp4              # Sample surveillance footage for quick testing
 ```
 
 ---
 
-## ⚙️ Configuration & Tuning (`config.py`)
+## ⚙️ Configuration & Customization (`config.py`)
 
-You can easily adjust settings in `config.py` without modifying any code:
+You can customize core behavioral thresholds directly in `config.py`:
 
 ```python
-# 1. Choose Detection Model
-YOLO_MODEL_PATH = "yolo11m.pt"        # Options: yolo11n.pt (fastest), yolo11m.pt (balanced), yolo11l.pt (highest accuracy)
+# Detection & Tracking Model
+YOLO_MODEL_PATH = "yolo11m.pt"        # Detection weights: yolo11n.pt, yolo11m.pt, yolo11l.pt
+CONFIDENCE_THRESHOLD = 0.28          # Sensitivity threshold (0.15 - 0.60)
+MIN_PERSON_HEIGHT = 45               # Minimum pixel height to filter distant noise
+MIN_PERSON_ASPECT_RATIO = 1.15       # Minimum height/width ratio to reject square reflections
 
-# 2. Detection Sensitivity
-CONFIDENCE_THRESHOLD = 0.32          # Lower (e.g., 0.25) for distant people; higher (e.g., 0.45) for busy scenes
-MIN_PERSON_HEIGHT = 40               # Discards detections smaller than 40 pixels
-MIN_PERSON_ASPECT_RATIO = 1.15       # Enforces human standing ratio to reject square reflections/shelves
+# Deep Re-Identification (ReID)
+REID_SIMILARITY_THRESHOLD = 0.68     # Similarity cutoff for identity matching
+MAX_EXEMPLARS_PER_PERSON = 5         # Number of viewpoint appearance crops saved per person
 
-# 3. Re-Identification (ReID) Sensitivity
-REID_SIMILARITY_THRESHOLD = 0.70     # Cosine similarity threshold for matching the same person
-MAX_EXEMPLARS_PER_PERSON = 5         # Number of viewpoint photos kept in memory per person
+# Temporal Journey Management
+EXIT_TIMEOUT_SECONDS = 15.0          # Inactivity buffer before recording visitor departure
 
-# 4. Exit Timeout
-EXIT_TIMEOUT_SECONDS = 15.0          # Seconds without detection before marking a person as EXITED
-
-# 5. Camera Topology
-DEFAULT_CAMERAS = {
-    "Cam-01": {"name": "Mall Main Entrance", "is_entrance": True, "is_exit": False},
-    "Cam-02": {"name": "Central Retail Hallway", "is_entrance": False, "is_exit": False},
-    "Cam-03": {"name": "West Exit Gate", "is_entrance": False, "is_exit": True},
-}
+# Display Settings
+DASHBOARD_WIDTH = 420                # Pixel width of the integrated side analytics HUD
 ```
-
----
-
-## 📊 Where Data is Saved
-
-1. **Processed Tracking Videos**:  
-   Saved to `output_videos/` (e.g., `tracked_cctv_final.mp4`). Contains the full surveillance video with bounding boxes, global IDs, and the real-time side dashboard.
-2. **Visitor Database**:  
-   Saved to `data/cctv_mall_tracking.db`. You can view it through the web dashboard or query with any SQLite viewer:
-   - `visitors`: Master table containing `person_id`, `entry_time`, `exit_time`, `dwell_seconds`, `status`, and thumbnail paths.
-   - `camera_events`: Log of each time a person enters a specific camera view.
-3. **Visitor Photos**:  
-   Cropped high-quality image thumbnails are saved to `data/person_crops/Person-XXX.jpg`.
 
 ---
 
 ## ❓ Frequently Asked Questions (FAQ)
 
-### How do I stop the tracking window?
-Click on the video window and press the **`q`** key or **`ESC`** key. The tracker will cleanly close the video, flush all pending journeys to the database, and save the MP4 file.
+#### Q1: Where are the tracking results and videos saved?
+* **Processed Videos**: Automatically exported to `output_videos/tracked_run_TIMESTAMP.mp4`.
+* **Visitor Database**: Stored in `data/cctv_mall_tracking.db` (compatible with any SQLite browser or DB viewer).
+* **Visitor Thumbnails**: Stored in `data/person_crops/`.
 
-### How do I reset the tracking data?
-Simply delete the contents of the `data/` folder (or delete `data/cctv_mall_tracking.db` and the contents of `data/person_crops/`). Fresh files will be recreated automatically on the next run.
+#### Q2: How do I clear past tracking history?
+Delete `data/cctv_mall_tracking.db` and the image files inside `data/person_crops/`. Fresh database tables will be initialized automatically on the next run.
 
-### Can I run this on a computer without an NVIDIA GPU?
-Yes. The system automatically detects whether CUDA is available. If an NVIDIA GPU is present, it accelerates YOLO11 and ReID with PyTorch CUDA; otherwise, it falls back to multi-threaded CPU execution.
+#### Q3: Can I run this on a laptop without a dedicated GPU?
+Yes! The system automatically detects hardware capabilities. On CPUs, YOLO11 uses multi-threaded inference, and the MobileNetV3 ReID backbone runs efficiently in real-time.
 
 ---
 
-## 📜 License & Credits
-Built with **Ultralytics YOLO11**, **PyTorch**, **OpenCV**, and **Streamlit**.
+## 📜 License & Acknowledgments
+* Detection: [Ultralytics YOLO11](https://github.com/ultralytics/ultralytics)
+* Deep Learning: [PyTorch](https://pytorch.org/) & [Torchvision](https://pytorch.org/vision/)
+* Computer Vision: [OpenCV](https://opencv.org/)
+* Web Dashboard: [Streamlit](https://streamlit.io/)
