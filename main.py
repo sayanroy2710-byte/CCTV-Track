@@ -304,6 +304,8 @@ def main():
         print(f"[SUCCESS] Tracking finished successfully.")
         print(f"[SUCCESS] Processed Video: {out_path}")
         print(f"[SUCCESS] Database updated: {config.DATABASE_PATH}")
+        final_kpi = tracker.journey_manager.get_summary_metrics()
+        print(f"[METRICS] Total Entered: {final_kpi['total_entered']} | Currently Present: {final_kpi['currently_present']} | Total Exited: {final_kpi['total_exited']} | Avg Dwell: {final_kpi['avg_dwell_str']}")
         print("=" * 74)
 
 

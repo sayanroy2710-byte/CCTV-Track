@@ -38,21 +38,14 @@ def get_color_for_id(global_id: str) -> Tuple[int, int, int]:
         return (0, 255, 200)
 
 
-def deduplicate_boxes(boxes_list, cached_lids=None):
+def deduplicate_boxes(boxes_list):
     """
     Suppresses duplicate / contained boxes on the same individual
     (e.g., separate torso and full-body detections from YOLO).
-    Prioritizes established tracks and larger full-body areas over partial slices.
     """
     if len(boxes_list) <= 1:
         return boxes_list
-    if cached_lids is None:
-        cached_lids = set()
-    boxes_list.sort(key=lambda item: (
-        1 if item[0] in cached_lids else 0,
-        (item[2][2] - item[2][0]) * (item[2][3] - item[2][1]),
-        item[1]
-    ), reverse=True)
+    boxes_list.sort(key=lambda item: (item[1], (item[2][2]-item[2][0])*(item[2][3]-item[2][1])), reverse=True)
     keep = []
     for lid, conf, xyxy, box in boxes_list:
         x1, y1, x2, y2 = xyxy
@@ -65,7 +58,7 @@ def deduplicate_boxes(boxes_list, cached_lids=None):
             if inter > 0:
                 ios = inter / min(a1, ka)
                 iou = inter / (a1 + ka - inter)
-                if ios >= 0.35 or iou >= 0.25:
+                if ios >= 0.60 or iou >= 0.40:
                     dup = True
                     break
         if not dup:
@@ -87,9 +80,6 @@ class MultiCameraTracker:
         
         self.trajectories: Dict[str, Dict[str, List[Tuple[int, int]]]] = {}
         self.frame_index = 0
-        self.local_track_hits: Dict[Tuple[str, int], int] = {}
-        self.local_track_last_seen: Dict[Tuple[str, int], Tuple[int, str]] = {}
-        self.MIN_CONFIRMED_HITS = 4
         self.live_camera_counts: Dict[str, int] = {}
 
     def process_camera_batch(self, camera_frames: List[Tuple[str, np.ndarray]],
@@ -99,11 +89,6 @@ class MultiCameraTracker:
             
         self.frame_index += 1
         frames = [cf[1] for cf in camera_frames]
-        
-        # Periodic cleanup of track hits
-        if self.frame_index % 120 == 0 and len(self.local_track_hits) > 50:
-            cached_keys = set(self.reid_bank.local_to_global_cache.keys())
-            self.local_track_hits = {k: v for k, v in self.local_track_hits.items() if k in cached_keys}
         
         results = self.model.track(
             source=frames,
@@ -151,33 +136,15 @@ class MultiCameraTracker:
                     if h_box < config.MIN_PERSON_HEIGHT or area_box < config.MIN_PERSON_AREA:
                         continue
                         
-                    # Geometry & aspect ratio filter: Reject horizontal or square shelf clutter
-                    aspect_ratio = h_box / max(1, w_box)
-                    min_ratio = getattr(config, "MIN_PERSON_ASPECT_RATIO", 1.15)
-                    if aspect_ratio < min_ratio and h_box < 160:
-                        continue
-                        
                     local_id = int(box.id[0].cpu().numpy()) if box.id is not None else -1
                     raw_boxes.append((local_id, conf, xyxy, box))
                     
-                cached_lids = set(lid for (cam, lid) in self.reid_bank.local_to_global_cache.keys() if cam == camera_id)
                 # Deduplicate overlapping/contained duplicate boxes on same person
-                valid_boxes = deduplicate_boxes(raw_boxes, cached_lids=cached_lids)
+                valid_boxes = deduplicate_boxes(raw_boxes)
                 # Prioritize established tracks in local cache first
                 valid_boxes.sort(key=lambda item: (0 if (camera_id, item[0]) in self.reid_bank.local_to_global_cache else 1, item[0]))
                 
                 for local_id, conf, xyxy, box in valid_boxes:
-                    lid = local_id if local_id >= 0 else None
-                    
-                    # Tracklet Confirmation: require persistence hits before official ReID registration
-                    if lid is not None:
-                        is_cached = (camera_id, lid) in self.reid_bank.local_to_global_cache
-                        if not is_cached:
-                            hits = self.local_track_hits.get((camera_id, lid), 0) + 1
-                            self.local_track_hits[(camera_id, lid)] = hits
-                            if hits < self.MIN_CONFIRMED_HITS:
-                                continue  # Suppress tentative tracklet until confirmed
-                    
                     x1, y1, x2, y2 = xyxy
                     h, w = frame.shape[:2]
                     x1, y1 = max(0, x1), max(0, y1)
@@ -185,15 +152,8 @@ class MultiCameraTracker:
                     
                     cx, cy = int((x1 + x2) / 2), int(y2)
                     person_crop = frame[y1:y2, x1:x2]
+                    lid = local_id if local_id >= 0 else None
                     
-                    # Exclude any GID currently bound to another active local track in this camera
-                    # (prevents two simultaneous tracks in the same camera from ever sharing or swapping IDs)
-                    excluded_gids = set(frame_assigned_gids)
-                    for (cam, active_lid), (last_f, active_gid) in self.local_track_last_seen.items():
-                        if cam == camera_id and active_lid != lid:
-                            if self.frame_index - last_f <= 3:
-                                excluded_gids.add(active_gid)
-
                     # Spatio-Temporal ReID
                     global_id, sim, is_new = self.reid_bank.match_or_register(
                         camera_id=camera_id,
@@ -203,12 +163,9 @@ class MultiCameraTracker:
                         frame_idx=self.frame_index,
                         timestamp=timestamp,
                         is_entrance=is_entrance,
-                        excluded_gids=excluded_gids
+                        excluded_gids=frame_assigned_gids
                     )
                     
-                    if lid is not None:
-                        self.local_track_last_seen[(camera_id, lid)] = (self.frame_index, global_id)
-                        
                     frame_assigned_gids.add(global_id)
                     active_detections_count += 1
                     

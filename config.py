@@ -20,11 +20,10 @@ CROPS_DIR.mkdir(parents=True, exist_ok=True)
 # Detection & Tracking Settings
 YOLO_MODEL_PATH = str(BASE_DIR / "yolo11m.pt")
 TRACKER_CONFIG_PATH = str(BASE_DIR / "custom_botsort.yaml")
-CONFIDENCE_THRESHOLD = 0.45          # High-precision person detection filter
+CONFIDENCE_THRESHOLD = 0.30          # High-sensitivity detection (matches original download)
 PERSON_CLASS_ID = 0                  # COCO class 0 is person
 MIN_PERSON_HEIGHT = 45               # Minimum pixel height for person
 MIN_PERSON_AREA = 1500               # Discard tiny reflection/shelf noise while retaining real people
-MIN_PERSON_ASPECT_RATIO = 1.15       # Minimum height-to-width ratio for genuine human bodies
 
 # Person Re-Identification (ReID) Parameters
 REID_BACKBONE = "mobilenet_v3_small"
@@ -41,7 +40,7 @@ DEFAULT_CAMERAS = {
 }
 
 # Timeout in seconds without detection before marked as exited
-EXIT_TIMEOUT_SECONDS = 5.0
+EXIT_TIMEOUT_SECONDS = 15.0
 
 # Display & UI Settings
 MAX_DISPLAY_HEIGHT = 720

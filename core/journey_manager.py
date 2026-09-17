@@ -149,11 +149,88 @@ class JourneyManager:
         for gid, exit_time, reason in to_exit:
             self.mark_exit(gid, exit_time, reason=reason)
 
+    def merge_short_overlapping_visitors(self, min_detections: int = 150):
+        """
+        Post-processing step: merge brief visitors that have overlapping time windows.
+        These are typically duplicate BoT-SORT tracks of the same brief background person.
+        
+        Visitors with >= min_detections are 'established' and never merged.
+        Visitors with < min_detections that overlap in time are merged (shorter into longer).
+        
+        Example: Walker detected as Person-004 (64 detections, 271-357) and Person-005
+        (58 detections, 318-393) both qualify and overlap → merged into one.
+        Man (683) and Woman (743) are both >> 150 → always protected.
+        """
+        all_gids = list(self.active_visitors.keys()) + list(self.completed_visitors.keys())
+        absorbed = {}  # gid_to_drop -> gid_to_keep
+
+        for i, gid1 in enumerate(all_gids):
+            if gid1 in absorbed:
+                continue
+            v1 = (self.active_visitors.get(gid1) or self.completed_visitors.get(gid1))
+            if v1 is None or v1.total_detections >= min_detections:
+                continue  # Protect established visitors
+
+            for gid2 in all_gids[i + 1:]:
+                if gid2 in absorbed:
+                    continue
+                v2 = (self.active_visitors.get(gid2) or self.completed_visitors.get(gid2))
+                if v2 is None or v2.total_detections >= min_detections:
+                    continue
+
+                # Check temporal overlap (or close gap < 3 seconds)
+                t1s, t1e = v1.entry_time, v1.last_seen_time
+                t2s, t2e = v2.entry_time, v2.last_seen_time
+                overlap = t1s <= t2e and t2s <= t1e
+                gap_sec = min(abs((t2s - t1e).total_seconds()), abs((t1s - t2e).total_seconds()))
+                if not overlap and gap_sec >= 3.0:
+                    continue
+
+                # Merge: absorb visitor with fewer detections into the other
+                keep, drop = (gid1, gid2) if v1.total_detections >= v2.total_detections else (gid2, gid1)
+                absorbed[drop] = keep
+
+        for drop_gid, keep_gid in absorbed.items():
+            if drop_gid in self.active_visitors:
+                drop_rec = self.active_visitors.pop(drop_gid)
+            elif drop_gid in self.completed_visitors:
+                drop_rec = self.completed_visitors.pop(drop_gid)
+            else:
+                continue
+
+            keep_rec = self.active_visitors.get(keep_gid) or self.completed_visitors.get(keep_gid)
+            if keep_rec:
+                keep_rec.total_detections += drop_rec.total_detections
+                if drop_rec.entry_time < keep_rec.entry_time:
+                    keep_rec.entry_time = drop_rec.entry_time
+                if drop_rec.last_seen_time > keep_rec.last_seen_time:
+                    keep_rec.last_seen_time = drop_rec.last_seen_time
+                    keep_rec.dwell_time_seconds = max(0.0,
+                        (keep_rec.last_seen_time - keep_rec.entry_time).total_seconds())
+
+            # Also update SQLite records if drop_gid was previously inserted
+            try:
+                with self._get_connection() as conn:
+                    cur = conn.cursor()
+                    cur.execute("DELETE FROM visitors WHERE global_id = ?", (drop_gid,))
+                    cur.execute("UPDATE camera_events SET global_id = ? WHERE global_id = ?", (keep_gid, drop_gid))
+                    conn.commit()
+            except Exception:
+                pass
+
+            # Log merge event
+            msg = f"[Merge] {drop_gid} → {keep_gid} (duplicate brief visitor collapsed)"
+            self.recent_events.append({"time": "", "text": msg, "type": "MERGE", "id": keep_gid})
+
     def flush_all_to_db(self, session_end_time: Optional[datetime] = None):
         """
         Flushes final stats for all visitors to SQLite on session finish.
-        Marks departing individuals as EXITED with their last seen timestamp.
+        Merges any duplicate short-lived visitor fragments first,
+        then marks departing individuals as EXITED with their last seen timestamp.
         """
+        # Collapse brief overlapping duplicate tracks before final database write
+        self.merge_short_overlapping_visitors(min_detections=150)
+
         now = session_end_time or datetime.now()
         for gid, record in list(self.active_visitors.items()):
             elapsed = (now - record.last_seen_time).total_seconds()
@@ -236,14 +313,9 @@ class JourneyManager:
         for cam_id in config.DEFAULT_CAMERAS.keys():
             camera_counts[cam_id] = 0
             
-        if live_camera_counts is not None:
+        if live_camera_counts:
             for cam_id, cnt in live_camera_counts.items():
                 camera_counts[cam_id] = cnt
-        elif current_time is not None:
-            for record in self.active_visitors.values():
-                elapsed = (current_time - record.last_seen_time).total_seconds()
-                if elapsed <= 2.0:
-                    camera_counts[record.last_camera] = camera_counts.get(record.last_camera, 0) + 1
         else:
             for record in self.active_visitors.values():
                 if record.last_camera in camera_counts:

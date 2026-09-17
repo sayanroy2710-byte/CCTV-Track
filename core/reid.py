@@ -129,14 +129,14 @@ class PersonMemory:
             dy = center[1] - self.last_center[1]
             dist = np.hypot(dx, dy)
             
-            # Gated spatial continuity: only apply modest continuity bonus if appearance already matches
-            if dt < 90 and raw_sim >= 0.58:
-                if dist < 120:
-                    return raw_sim + 0.10, raw_sim
-                elif dist < 280 and abs(dy) < 100:  # Consistent walking motion across occluders
-                    return raw_sim + 0.08, raw_sim
-            elif dt > 180 and dist > 350:
-                return raw_sim - 0.10, raw_sim
+            # Trajectory continuity across brief occlusions (e.g. walking behind counters/pillars)
+            if dt < 45:
+                if dist < 80:
+                    return raw_sim + 0.20, raw_sim
+                elif dist < 220 and abs(dy) < 60:  # Walking horizontally across background
+                    return raw_sim + 0.18, raw_sim
+            elif dt > 120 and dist > 300:
+                return raw_sim - 0.15, raw_sim
                 
         return raw_sim, raw_sim
 
