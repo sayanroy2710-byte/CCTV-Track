@@ -32,6 +32,14 @@ REID_FEATURE_ALPHA = 0.85            # Momentum update for feature gallery
 MAX_EXEMPLARS_PER_PERSON = 5         # Viewpoint templates per person
 MAX_GALLERY_IMAGES_PER_PERSON = 4    # Crops stored per person
 
+# Pose Estimation & Multi-Cue Fusion Parameters
+ENABLE_POSE_ESTIMATION = True        # Enable YOLO11-Pose for keypoints & ground anchoring
+POSE_MODEL_PATH = str(BASE_DIR / "yolo11n-pose.pt")
+POSE_KEYPOINT_CONF_THRESHOLD = 0.35  # Confidence for valid keypoints
+FUSION_HIGH_CONF_THRESHOLD = 0.68    # Tier 1 auto-association threshold
+FUSION_MEDIUM_CONF_THRESHOLD = 0.52  # Tier 2 tentative association threshold
+DRAW_POSE_SKELETON = True            # Render subtle pose keypoint overlay in output video
+
 # Journey and Dwell Time Parameters
 DEFAULT_CAMERAS = {
     "Cam-01": {"name": "Mall Main Entrance / Hallway", "is_entrance": True, "is_exit": False},

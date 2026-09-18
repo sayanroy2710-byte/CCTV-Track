@@ -81,6 +81,13 @@ class MultiCameraTracker:
         self.trajectories: Dict[str, Dict[str, List[Tuple[int, int]]]] = {}
         self.frame_index = 0
         self.live_camera_counts: Dict[str, int] = {}
+        
+        # Initialize Pose Estimator for keypoints & ground anchoring
+        if getattr(config, "ENABLE_POSE_ESTIMATION", False):
+            from core.pose_estimator import PoseEstimator
+            self.pose_estimator = PoseEstimator(device=device)
+        else:
+            self.pose_estimator = None
 
     def process_camera_batch(self, camera_frames: List[Tuple[str, np.ndarray]],
                              timestamp: datetime) -> List[np.ndarray]:
@@ -123,6 +130,9 @@ class MultiCameraTracker:
             cv2.putText(annotated, cam_title, (12, 19),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.46, (240, 240, 240), 1, cv2.LINE_AA)
             
+            # Multi-person Pose Estimation for ground contact and structural geometry
+            pose_detections = self.pose_estimator.extract_poses(frame) if self.pose_estimator else []
+
             if r.boxes is not None and len(r.boxes) > 0:
                 raw_boxes = []
                 for box in r.boxes:
@@ -150,11 +160,19 @@ class MultiCameraTracker:
                     x1, y1 = max(0, x1), max(0, y1)
                     x2, y2 = min(w - 1, x2), min(h - 1, y2)
                     
-                    cx, cy = int((x1 + x2) / 2), int(y2)
+                    # Match pose detection for ground contact (ankles) & structural proportion features
+                    matched_pose = self.pose_estimator.match_pose_to_bbox(xyxy, pose_detections) if self.pose_estimator else None
+                    if matched_pose is not None:
+                        cx, cy = matched_pose.ground_point
+                        struct_feat = matched_pose.structural_vector
+                    else:
+                        cx, cy = int((x1 + x2) / 2), int(y2)
+                        struct_feat = None
+                        
                     person_crop = frame[y1:y2, x1:x2]
                     lid = local_id if local_id >= 0 else None
                     
-                    # Spatio-Temporal ReID
+                    # Confidence-Weighted Multi-Cue Spatio-Temporal ReID
                     global_id, sim, is_new = self.reid_bank.match_or_register(
                         camera_id=camera_id,
                         local_track_id=lid,
@@ -163,7 +181,8 @@ class MultiCameraTracker:
                         frame_idx=self.frame_index,
                         timestamp=timestamp,
                         is_entrance=is_entrance,
-                        excluded_gids=frame_assigned_gids
+                        excluded_gids=frame_assigned_gids,
+                        structural_feat=struct_feat
                     )
                     
                     frame_assigned_gids.add(global_id)
@@ -181,7 +200,7 @@ class MultiCameraTracker:
                         is_new=is_new
                     )
                     
-                    # Update Trajectory
+                    # Update Trajectory using precise ground anchor
                     if global_id not in self.trajectories[camera_id]:
                         self.trajectories[camera_id][global_id] = []
                     self.trajectories[camera_id][global_id].append((cx, cy))
@@ -195,6 +214,23 @@ class MultiCameraTracker:
                     for i in range(1, len(pts)):
                         cv2.line(annotated, pts[i - 1], pts[i], color, 2)
                         
+                    # Render Pose Skeleton if enabled
+                    if getattr(config, "DRAW_POSE_SKELETON", False) and matched_pose is not None:
+                        kp = matched_pose.keypoints
+                        k_thresh = getattr(config, "POSE_KEYPOINT_CONF_THRESHOLD", 0.35)
+                        bones = [(5, 6), (5, 7), (7, 9), (6, 8), (8, 10),
+                                 (5, 11), (6, 12), (11, 12), (11, 13), (13, 15), (12, 14), (14, 16)]
+                        for idx1, idx2 in bones:
+                            if kp[idx1][2] >= k_thresh and kp[idx2][2] >= k_thresh:
+                                pt1 = (int(kp[idx1][0]), int(kp[idx1][1]))
+                                pt2 = (int(kp[idx2][0]), int(kp[idx2][1]))
+                                cv2.line(annotated, pt1, pt2, (180, 240, 200), 1, cv2.LINE_AA)
+                        for idx_k in range(len(kp)):
+                            if kp[idx_k][2] >= k_thresh:
+                                cv2.circle(annotated, (int(kp[idx_k][0]), int(kp[idx_k][1])), 2, (0, 255, 255), -1)
+                        # Ankle-based ground contact marker
+                        cv2.circle(annotated, (cx, cy), 3, (0, 255, 0), -1)
+
                     # Bounding Box
                     cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
                     

@@ -103,11 +103,15 @@ class DeepReIDExtractor:
         return fused.astype(np.float32)
 
 
+from core.fusion import MultiCueFusionEngine
+
 class PersonMemory:
     def __init__(self, global_id: str, initial_embedding: np.ndarray, initial_crop: np.ndarray,
-                 camera_id: str, center: Tuple[int, int], frame_idx: int, timestamp: datetime):
+                 camera_id: str, center: Tuple[int, int], frame_idx: int, timestamp: datetime,
+                 initial_struct: Optional[np.ndarray] = None):
         self.global_id = global_id
         self.exemplars: List[np.ndarray] = [initial_embedding.copy()]
+        self.structural_exemplars: List[np.ndarray] = [initial_struct.copy()] if initial_struct is not None else []
         self.crops: List[str] = []
         self.total_detections = 1
         
@@ -140,9 +144,15 @@ class PersonMemory:
                 
         return raw_sim, raw_sim
 
+    def get_best_structural(self) -> Optional[np.ndarray]:
+        if self.structural_exemplars:
+            return self.structural_exemplars[0]
+        return None
+
     def update(self, new_embedding: np.ndarray, camera_id: str,
                center: Tuple[int, int], frame_idx: int, timestamp: datetime,
-               crop: Optional[np.ndarray] = None):
+               crop: Optional[np.ndarray] = None,
+               structural_feat: Optional[np.ndarray] = None):
         self.total_detections += 1
         self.last_camera = camera_id
         self.last_center = center
@@ -161,6 +171,15 @@ class PersonMemory:
             best_idx = int(np.argmax(sims))
             updated = config.REID_FEATURE_ALPHA * self.exemplars[best_idx] + (1.0 - config.REID_FEATURE_ALPHA) * new_embedding
             self.exemplars[best_idx] = (updated / (np.linalg.norm(updated) + 1e-6)).astype(np.float32)
+
+        # Update structural proportion memory with exponential moving average
+        if structural_feat is not None:
+            if not self.structural_exemplars:
+                self.structural_exemplars.append(structural_feat.copy())
+            elif raw_sim >= 0.70:
+                cur_s = self.structural_exemplars[0]
+                up_s = 0.85 * cur_s + 0.15 * structural_feat
+                self.structural_exemplars[0] = (up_s / (np.linalg.norm(up_s) + 1e-6)).astype(np.float32)
 
     def save_crop(self, crop: np.ndarray):
         if crop is None or crop.size == 0:
@@ -185,6 +204,10 @@ class ReIDMemoryBank:
         self.persons: Dict[str, PersonMemory] = {}
         self.next_id_number = 1
         self.local_to_global_cache: Dict[Tuple[str, int], str] = {}
+        self.fusion_engine = MultiCueFusionEngine(
+            high_thresh=getattr(config, "FUSION_HIGH_CONF_THRESHOLD", 0.68),
+            medium_thresh=getattr(config, "FUSION_MEDIUM_CONF_THRESHOLD", 0.52)
+        )
 
     def _generate_global_id(self) -> str:
         gid = f"Person-{self.next_id_number:03d}"
@@ -195,7 +218,8 @@ class ReIDMemoryBank:
                           crop: np.ndarray, center: Tuple[int, int],
                           frame_idx: int, timestamp: datetime,
                           is_entrance: bool = False,
-                          excluded_gids: Optional[Set[str]] = None) -> Tuple[str, float, bool]:
+                          excluded_gids: Optional[Set[str]] = None,
+                          structural_feat: Optional[np.ndarray] = None) -> Tuple[str, float, bool]:
         if excluded_gids is None:
             excluded_gids = set()
             
@@ -208,10 +232,10 @@ class ReIDMemoryBank:
                 if crop is not None and crop.shape[0] > 30 and crop.shape[1] > 15:
                     feat = self.extractor.extract_features([crop])
                     if feat.shape[0] > 0 and gid in self.persons:
-                        self.persons[gid].update(feat[0], camera_id, center, frame_idx, timestamp, crop)
+                        self.persons[gid].update(feat[0], camera_id, center, frame_idx, timestamp, crop, structural_feat)
                 return gid, 1.0, False
 
-        # 2. Extract candidate feature
+        # 2. Extract candidate appearance feature
         feat = self.extractor.extract_features([crop])
         if feat.shape[0] == 0:
             new_gid = self._generate_global_id()
@@ -221,31 +245,69 @@ class ReIDMemoryBank:
             
         candidate_feat = feat[0]
         
-        # 3. Spatio-Temporal ReID Matching
-        best_gid = None
-        best_score = -1.0
-        
+        # 3. Multi-Cue Matching across active identities
+        candidate_matches = []
         for gid, mem in self.persons.items():
             if gid in excluded_gids:
                 continue
                 
-            eff_score, _ = mem.match_score(candidate_feat, camera_id, center, frame_idx)
-            if eff_score > best_score:
-                best_score = eff_score
-                best_gid = gid
-                
-        # 4. Decision
-        if best_score >= self.similarity_threshold and best_gid is not None:
-            self.persons[best_gid].update(candidate_feat, camera_id, center, frame_idx, timestamp, crop)
-            if cache_key:
-                self.local_to_global_cache[cache_key] = best_gid
-            return best_gid, best_score, False
-        else:
+            eff_app_score, raw_app_score = mem.match_score(candidate_feat, camera_id, center, frame_idx)
+            dt = max(1, frame_idx - mem.last_frame)
+            s_motion = self.fusion_engine.compute_motion_score(center, mem.last_center, dt)
+            s_struct = self.fusion_engine.compute_structural_score(structural_feat, mem.get_best_structural())
+            
+            candidate_matches.append({
+                "gid": gid,
+                "mem": mem,
+                "eff_app": eff_app_score,
+                "raw_app": raw_app_score,
+                "s_motion": s_motion,
+                "s_struct": s_struct,
+                "dt": dt
+            })
+            
+        if not candidate_matches:
             new_gid = self._generate_global_id()
-            self.persons[new_gid] = PersonMemory(new_gid, candidate_feat, crop, camera_id, center, frame_idx, timestamp)
+            self.persons[new_gid] = PersonMemory(new_gid, candidate_feat, crop, camera_id, center, frame_idx, timestamp, structural_feat)
             if cache_key:
                 self.local_to_global_cache[cache_key] = new_gid
-            return new_gid, max(0.0, best_score), True
+            return new_gid, 0.0, True
+
+        # Sort by appearance score to measure ambiguity margin
+        candidate_matches.sort(key=lambda x: x["eff_app"], reverse=True)
+        top1 = candidate_matches[0]
+        ambiguity_margin = (top1["eff_app"] - candidate_matches[1]["eff_app"]) if len(candidate_matches) > 1 else 1.0
+
+        # Score and fuse all candidates
+        best_gid = None
+        best_fused_score = -1.0
+        best_tier = "LOW"
+        
+        for cand in candidate_matches:
+            fused_score, tier, _ = self.fusion_engine.fuse_cues(
+                s_motion=cand["s_motion"],
+                s_appearance=cand["eff_app"],
+                s_structure=cand["s_struct"],
+                dt_frames=cand["dt"],
+                ambiguity_margin=ambiguity_margin
+            )
+            if fused_score > best_fused_score:
+                best_fused_score = fused_score
+                best_gid = cand["gid"]
+                best_tier = tier
+
+        # 4. Confidence-Tiered Decision
+        if best_fused_score >= self.similarity_threshold and best_gid is not None and best_tier in ("HIGH", "MEDIUM"):
+            self.persons[best_gid].update(candidate_feat, camera_id, center, frame_idx, timestamp, crop, structural_feat)
+            if cache_key:
+                self.local_to_global_cache[cache_key] = best_gid
+            return best_gid, best_fused_score, False
+        else:
+            new_gid = self._generate_global_id()
+            self.persons[new_gid] = PersonMemory(new_gid, candidate_feat, crop, camera_id, center, frame_idx, timestamp, structural_feat)
+            if cache_key:
+                self.local_to_global_cache[cache_key] = new_gid
+            return new_gid, max(0.0, best_fused_score), True
 
     def get_person_crops(self, global_id: str) -> List[str]:
         if global_id in self.persons:
