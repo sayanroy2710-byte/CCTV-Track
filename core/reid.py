@@ -104,6 +104,7 @@ class DeepReIDExtractor:
 
 
 from core.fusion import MultiCueFusionEngine
+from core.crop_quality import CropQualityGate
 
 class PersonMemory:
     def __init__(self, global_id: str, initial_embedding: np.ndarray, initial_crop: np.ndarray,
@@ -162,12 +163,12 @@ class PersonMemory:
         sims = [float(np.dot(new_embedding, ex)) for ex in self.exemplars]
         raw_sim = max(sims) if sims else 0.0
         
-        # Guard against gallery contamination from passing shadows / occluders
+        # Guard against gallery contamination: only add/update when sample is confident
         if 0.72 <= raw_sim < 0.88 and len(self.exemplars) < config.MAX_EXEMPLARS_PER_PERSON:
-            self.exemplars.append(new_embedding.copy())
             if crop is not None:
+                self.exemplars.append(new_embedding.copy())
                 self.save_crop(crop)
-        elif raw_sim >= 0.72:
+        elif raw_sim >= 0.72 and crop is not None:
             best_idx = int(np.argmax(sims))
             updated = config.REID_FEATURE_ALPHA * self.exemplars[best_idx] + (1.0 - config.REID_FEATURE_ALPHA) * new_embedding
             self.exemplars[best_idx] = (updated / (np.linalg.norm(updated) + 1e-6)).astype(np.float32)
@@ -204,6 +205,7 @@ class ReIDMemoryBank:
         self.persons: Dict[str, PersonMemory] = {}
         self.next_id_number = 1
         self.local_to_global_cache: Dict[Tuple[str, int], str] = {}
+        self.quality_gate = CropQualityGate()
         self.fusion_engine = MultiCueFusionEngine(
             high_thresh=getattr(config, "FUSION_HIGH_CONF_THRESHOLD", 0.68),
             medium_thresh=getattr(config, "FUSION_MEDIUM_CONF_THRESHOLD", 0.52)
@@ -219,12 +221,20 @@ class ReIDMemoryBank:
                           frame_idx: int, timestamp: datetime,
                           is_entrance: bool = False,
                           excluded_gids: Optional[Set[str]] = None,
-                          structural_feat: Optional[np.ndarray] = None) -> Tuple[str, float, bool]:
+                          structural_feat: Optional[np.ndarray] = None,
+                          bbox: Optional[Tuple[int, int, int, int]] = None,
+                          frame_shape: Optional[Tuple[int, ...]] = None) -> Tuple[str, float, bool]:
         if excluded_gids is None:
             excluded_gids = set()
             
         cache_key = (camera_id, local_track_id) if local_track_id is not None and local_track_id >= 0 else None
         
+        # Check crop quality
+        crop_usable = True
+        if bbox is not None and frame_shape is not None:
+            crop_usable, _, _ = self.quality_gate.assess_crop(crop, bbox, frame_shape)
+        crop_for_gallery = crop if crop_usable else None
+
         # 1. Existing local-to-global association
         if cache_key and cache_key in self.local_to_global_cache:
             gid = self.local_to_global_cache[cache_key]
@@ -232,7 +242,7 @@ class ReIDMemoryBank:
                 if crop is not None and crop.shape[0] > 30 and crop.shape[1] > 15:
                     feat = self.extractor.extract_features([crop])
                     if feat.shape[0] > 0 and gid in self.persons:
-                        self.persons[gid].update(feat[0], camera_id, center, frame_idx, timestamp, crop, structural_feat)
+                        self.persons[gid].update(feat[0], camera_id, center, frame_idx, timestamp, crop_for_gallery, structural_feat)
                 return gid, 1.0, False
 
         # 2. Extract candidate appearance feature
@@ -298,7 +308,7 @@ class ReIDMemoryBank:
 
         # 4. Confidence-Tiered Decision
         if best_fused_score >= self.similarity_threshold and best_gid is not None and best_tier in ("HIGH", "MEDIUM"):
-            self.persons[best_gid].update(candidate_feat, camera_id, center, frame_idx, timestamp, crop, structural_feat)
+            self.persons[best_gid].update(candidate_feat, camera_id, center, frame_idx, timestamp, crop_for_gallery, structural_feat)
             if cache_key:
                 self.local_to_global_cache[cache_key] = best_gid
             return best_gid, best_fused_score, False

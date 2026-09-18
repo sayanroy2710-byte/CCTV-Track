@@ -45,7 +45,10 @@ class JourneyManager:
         self.recent_events: List[Dict[str, Any]] = []
         
     def _get_connection(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=15.0)
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+        return conn
 
     def _init_database(self):
         with self._get_connection() as conn:
@@ -138,12 +141,21 @@ class JourneyManager:
         for gid, record in list(self.active_visitors.items()):
             cam_info = config.DEFAULT_CAMERAS.get(record.last_camera, {})
             is_exit_cam = cam_info.get("is_exit", False)
+            is_entrance_cam = cam_info.get("is_entrance", False)
             elapsed = (current_time - record.last_seen_time).total_seconds()
             
-            thresh = 2.5 if is_exit_cam else timeout_seconds
+            # Portal-aware adaptive timeout:
+            # Quick timeout at exit/entrance gates; relaxed timeout inside premises for occlusions
+            if is_exit_cam:
+                thresh = 2.5
+            elif is_entrance_cam:
+                thresh = min(timeout_seconds, 6.0)
+            else:
+                thresh = max(timeout_seconds, 30.0)
+                
             if elapsed > thresh:
                 reason = "Exit Gate Departure" if is_exit_cam else "Departed Camera View"
-                # The true exit time is when the visitor was last seen leaving the frame
+                # Honest time: true exit time is when the visitor was last seen leaving the frame
                 to_exit.append((gid, record.last_seen_time, reason))
                 
         for gid, exit_time, reason in to_exit:

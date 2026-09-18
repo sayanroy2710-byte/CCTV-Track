@@ -172,7 +172,7 @@ class MultiCameraTracker:
                     person_crop = frame[y1:y2, x1:x2]
                     lid = local_id if local_id >= 0 else None
                     
-                    # Confidence-Weighted Multi-Cue Spatio-Temporal ReID
+                    # Confidence-Weighted Multi-Cue Spatio-Temporal ReID with Crop Quality Guard
                     global_id, sim, is_new = self.reid_bank.match_or_register(
                         camera_id=camera_id,
                         local_track_id=lid,
@@ -182,7 +182,9 @@ class MultiCameraTracker:
                         timestamp=timestamp,
                         is_entrance=is_entrance,
                         excluded_gids=frame_assigned_gids,
-                        structural_feat=struct_feat
+                        structural_feat=struct_feat,
+                        bbox=(int(x1), int(y1), int(x2), int(y2)),
+                        frame_shape=frame.shape
                     )
                     
                     frame_assigned_gids.add(global_id)
