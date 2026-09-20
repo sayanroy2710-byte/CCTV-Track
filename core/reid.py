@@ -246,8 +246,14 @@ class ReIDMemoryBank:
                 if crop is not None and crop.shape[0] > 30 and crop.shape[1] > 15:
                     feat = self.extractor.extract_features([crop])
                     if feat.shape[0] > 0 and gid in self.persons:
-                        self.persons[gid].update(feat[0], camera_id, center, frame_idx, timestamp, crop_for_gallery, structural_feat)
-                return gid, 1.0, False
+                        cached_sims = [float(np.dot(feat[0], ex)) for ex in self.persons[gid].exemplars]
+                        # Cache sanity check: if visual similarity completely collapsed (< 0.45),
+                        # BoT-SORT switched identity to a different individual. Invalidate cache!
+                        if cached_sims and max(cached_sims) < 0.45:
+                            del self.local_to_global_cache[cache_key]
+                        else:
+                            self.persons[gid].update(feat[0], camera_id, center, frame_idx, timestamp, crop_for_gallery, structural_feat)
+                            return gid, 1.0, False
 
         # 2. Extract candidate appearance feature
         feat = self.extractor.extract_features([crop])

@@ -64,9 +64,24 @@ def deduplicate_boxes(boxes_list):
                 ios = inter / min(a1, ka)
                 iou = inter / (a1 + ka - inter)
                 x_ratio = x_inter / max(1, min(w1, kw))
-                if ios >= 0.45 or iou >= 0.35 or (x_ratio >= 0.65 and ios >= 0.35):
+                
+                # Check for vertical body fragment containment (e.g. head or torso box overlapping body)
+                # If two boxes share >= 70% horizontal alignment and overlap vertically, they are part of the same person
+                if x_ratio >= 0.70:
                     dup = True
                     break
+                
+                # If both boxes have distinct, valid local track IDs from BoT-SORT, they represent separate individuals
+                # unless almost entirely coincident (e.g. iou >= 0.50 or ios >= 0.65)
+                if lid >= 0 and klid >= 0 and lid != klid:
+                    if iou >= 0.50 or ios >= 0.65:
+                        dup = True
+                        break
+                else:
+                    # One or both are untracked / newly spawned fragment boxes
+                    if ios >= 0.45 or iou >= 0.35:
+                        dup = True
+                        break
         if not dup:
             keep.append((lid, conf, xyxy, box))
     return keep

@@ -29,8 +29,8 @@ class MultiCueFusionEngine:
         dy = current_pos[1] - last_pos[1]
         dist = np.hypot(dx, dy)
         
-        # Expected max radius scales with elapsed frames
-        expected_radius = max(30.0, 18.0 * min(dt_frames, 10))
+        # Expected max radius based on realistic human walking speed in CCTV (3-5 px/frame at 24fps)
+        expected_radius = max(30.0, 5.0 * min(dt_frames, 30))
         motion_sim = float(np.exp(-0.5 * (dist / expected_radius) ** 2))
         return float(np.clip(motion_sim, 0.0, 1.0))
 
@@ -60,6 +60,11 @@ class MultiCueFusionEngine:
             tier: 'HIGH', 'MEDIUM', or 'LOW'
             explanation: detailed breakdown dictionary
         """
+        # Physically impossible teleportation guard:
+        # Within the same short observation window (<= 30 frames / 1.2s), a person cannot teleport across distant zones
+        if dt_frames <= 30 and s_motion < 0.02:
+            return 0.0, "LOW", {"strategy": "impossible_teleportation", "fused_score": 0.0}
+
         # 1. Determine dynamic weights based on context
         if dt_frames <= 5 and ambiguity_margin >= 0.08:
             # Case A: Continuous smooth tracking, appearance is unambiguous
@@ -81,11 +86,22 @@ class MultiCueFusionEngine:
             w_mot, w_app, w_struct = 0.10, 0.45, 0.45
             strategy = "ambiguity_fallback"
             
-        # Normalize weights
+        # Dynamically normalize over only the observable cues
+        has_struct = (s_structure > 0.0)
+        has_mot = (s_motion > 0.0 and dt_frames <= 15)
+        
+        if not has_struct:
+            w_struct = 0.0
+        if not has_mot:
+            w_mot = 0.0
+            
         total_w = w_mot + w_app + w_struct
-        w_mot /= total_w
-        w_app /= total_w
-        w_struct /= total_w
+        if total_w > 0:
+            w_mot /= total_w
+            w_app /= total_w
+            w_struct /= total_w
+        else:
+            w_app = 1.0
         
         # 2. Compute fused confidence
         fused_score = (w_mot * s_motion) + (w_app * s_appearance) + (w_struct * s_structure)
