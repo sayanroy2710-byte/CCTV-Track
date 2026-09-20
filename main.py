@@ -173,7 +173,7 @@ def main():
     first_h = streams[0].height
     
     if num_cams == 1:
-        cam_target_h = min(config.MAX_DISPLAY_HEIGHT, first_h)
+        cam_target_h = max(720, first_h)
         cam_target_w = int(first_w * (cam_target_h / first_h))
         grid_w = cam_target_w
         grid_h = cam_target_h
