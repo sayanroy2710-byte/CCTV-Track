@@ -45,20 +45,26 @@ def deduplicate_boxes(boxes_list):
     """
     if len(boxes_list) <= 1:
         return boxes_list
-    boxes_list.sort(key=lambda item: (item[1], (item[2][2]-item[2][0])*(item[2][3]-item[2][1])), reverse=True)
+    # Sort primarily by bounding box area (full-body boxes preferred over partial torso crops)
+    boxes_list.sort(key=lambda item: ((item[2][2]-item[2][0])*(item[2][3]-item[2][1]), item[1]), reverse=True)
     keep = []
     for lid, conf, xyxy, box in boxes_list:
         x1, y1, x2, y2 = xyxy
-        a1 = (x2 - x1) * (y2 - y1)
+        w1, h1 = x2 - x1, y2 - y1
+        a1 = w1 * h1
         dup = False
         for klid, kconf, kxyxy, kbox in keep:
             kx1, ky1, kx2, ky2 = kxyxy
-            ka = (kx2 - kx1) * (ky2 - ky1)
-            inter = max(0, min(x2, kx2) - max(x1, kx1)) * max(0, min(y2, ky2) - max(y1, ky1))
+            kw, kh = kx2 - kx1, ky2 - ky1
+            ka = kw * kh
+            x_inter = max(0, min(x2, kx2) - max(x1, kx1))
+            y_inter = max(0, min(y2, ky2) - max(y1, ky1))
+            inter = x_inter * y_inter
             if inter > 0:
                 ios = inter / min(a1, ka)
                 iou = inter / (a1 + ka - inter)
-                if ios >= 0.60 or iou >= 0.40:
+                x_ratio = x_inter / max(1, min(w1, kw))
+                if ios >= 0.45 or iou >= 0.35 or (x_ratio >= 0.65 and ios >= 0.35):
                     dup = True
                     break
         if not dup:

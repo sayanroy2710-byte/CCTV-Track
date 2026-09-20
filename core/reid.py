@@ -129,12 +129,7 @@ class PersonMemory:
             return 0.0, 0.0
             
         raw_sim = max(sims)
-        # Multi-exemplar visual agreement across previous clicked images
-        if len(sims) >= 2:
-            sorted_sims = sorted(sims, reverse=True)
-            visual_sim = 0.75 * sorted_sims[0] + 0.25 * sorted_sims[1]
-        else:
-            visual_sim = raw_sim
+        visual_sim = raw_sim
         
         # Local spatio-temporal continuity boost for immediate adjacent frames
         if camera_id == self.last_camera:
@@ -144,11 +139,11 @@ class PersonMemory:
             dist = np.hypot(dx, dy)
             
             # Trajectory continuity across brief occlusions (e.g. walking behind counters/pillars)
-            if dt < 45:
-                if dist < 80:
+            if dt < 45 and raw_sim >= 0.62:
+                if dist < 65:
                     return visual_sim + 0.20, raw_sim
-                elif dist < 220 and abs(dy) < 60:  # Walking horizontally across background
-                    return visual_sim + 0.18, raw_sim
+                elif dist < (20 + dt * 2.0) and abs(dy) < 40:  # Physically realistic walking speed
+                    return visual_sim + 0.15, raw_sim
             # Note: No time-decay or waiting-timer penalty is applied for dt > 120.
             # Long-term re-identification is driven by pure visual match from previous clicked images.
                 

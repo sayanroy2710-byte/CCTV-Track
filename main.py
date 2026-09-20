@@ -220,7 +220,6 @@ def main():
                 ret, frame = stream.read()
                 if ret and frame is not None:
                     all_streams_ended = False
-                    frame = cv2.resize(frame, (cam_target_w, cam_target_h))
                 else:
                     frame = np.zeros((cam_target_h, cam_target_w, 3), dtype=np.uint8)
                     cv2.putText(frame, f"{stream.camera_id} Signal Lost / Ended", (30, 80),
@@ -231,8 +230,13 @@ def main():
                 print("\n[INFO] End of video stream(s) reached.")
                 break
                 
-            # Batched Spatio-Temporal Tracking + Deep ReID
+            # Batched Spatio-Temporal Tracking + Deep ReID (on native resolution)
             ann_frames = tracker.process_camera_batch(batch_inputs, sim_time)
+            ann_frames = [
+                cv2.resize(f, (cam_target_w, cam_target_h), interpolation=cv2.INTER_LINEAR)
+                if (f.shape[1] != cam_target_w or f.shape[0] != cam_target_h) else f
+                for f in ann_frames
+            ]
             
             # Check departure timeouts
             tracker.journey_manager.check_timeouts(sim_time, timeout_seconds=args.exit_timeout)
