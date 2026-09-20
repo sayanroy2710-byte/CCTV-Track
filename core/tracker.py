@@ -89,12 +89,21 @@ class MultiCameraTracker:
         else:
             self.pose_estimator = None
 
+        # Motion Verification / Static Object Rejection (Requirement 5: if still then not a person)
+        self.track_motion_history: Dict[Tuple[str, int], List[Tuple[float, float]]] = {}
+        self.static_non_person_tracks: Set[Tuple[str, int]] = set()
+
     def process_camera_batch(self, camera_frames: List[Tuple[str, np.ndarray]],
                              timestamp: datetime) -> List[np.ndarray]:
         if not camera_frames:
             return []
             
         self.frame_index += 1
+        
+        # Periodic prune of motion history memory
+        if self.frame_index % 300 == 0 and len(self.track_motion_history) > 200:
+            self.track_motion_history = {k: v for k, v in list(self.track_motion_history.items())[-100:]}
+
         frames = [cf[1] for cf in camera_frames]
         
         results = self.model.track(
@@ -147,6 +156,34 @@ class MultiCameraTracker:
                         continue
                         
                     local_id = int(box.id[0].cpu().numpy()) if box.id is not None else -1
+                    
+                    # Requirement 5: Motion Verification (filter stationary non-person objects)
+                    if getattr(config, "FILTER_STATIC_OBJECTS", True) and local_id >= 0:
+                        bcx, bcy = float((x1 + x2) / 2.0), float(y2)
+                        mkey = (camera_id, local_id)
+                        if mkey not in self.track_motion_history:
+                            self.track_motion_history[mkey] = []
+                        self.track_motion_history[mkey].append((bcx, bcy))
+                        
+                        window_sz = getattr(config, "STATIC_OBSERVATION_WINDOW_FRAMES", 30)
+                        if len(self.track_motion_history[mkey]) > window_sz:
+                            self.track_motion_history[mkey].pop(0)
+                            
+                        if len(self.track_motion_history[mkey]) >= window_sz:
+                            pts_arr = np.array(self.track_motion_history[mkey])
+                            std_x = float(np.std(pts_arr[:, 0]))
+                            std_y = float(np.std(pts_arr[:, 1]))
+                            net_disp = float(np.linalg.norm(pts_arr[-1] - pts_arr[0]))
+                            min_disp = getattr(config, "MIN_MOTION_DISPLACEMENT_PX", 3.5)
+                            
+                            if std_x < 0.8 and std_y < 0.8 and net_disp < min_disp:
+                                self.static_non_person_tracks.add(mkey)
+                            else:
+                                self.static_non_person_tracks.discard(mkey)
+                                
+                        if mkey in self.static_non_person_tracks:
+                            continue
+
                     raw_boxes.append((local_id, conf, xyxy, box))
                     
                 # Deduplicate overlapping/contained duplicate boxes on same person

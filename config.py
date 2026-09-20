@@ -40,6 +40,11 @@ FUSION_HIGH_CONF_THRESHOLD = 0.68    # Tier 1 auto-association threshold
 FUSION_MEDIUM_CONF_THRESHOLD = 0.52  # Tier 2 tentative association threshold
 DRAW_POSE_SKELETON = True            # Render subtle pose keypoint overlay in output video
 
+# Motion Verification / Static Object Rejection (Requirement 5: if still then not a person)
+FILTER_STATIC_OBJECTS = True         # Filter out non-human stationary objects (mannequins, posters, cutouts)
+MIN_MOTION_DISPLACEMENT_PX = 3.5     # Minimum pixel movement required over observation window
+STATIC_OBSERVATION_WINDOW_FRAMES = 30# Evaluation window frames before confirming genuine human motion
+
 # Journey and Dwell Time Parameters
 DEFAULT_CAMERAS = {
     "Cam-01": {"name": "Mall Main Entrance / Hallway", "is_entrance": True, "is_exit": False},
