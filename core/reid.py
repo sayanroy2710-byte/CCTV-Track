@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from datetime import datetime
-from typing import Dict, List, Tuple, Optional, Set
+from typing import Dict, List, Tuple, Optional, Set, Any
 import torchvision.models as models
 import torchvision.transforms as transforms
 import config
@@ -125,9 +125,18 @@ class PersonMemory:
     def match_score(self, candidate_embedding: np.ndarray, camera_id: str,
                     center: Tuple[int, int], frame_idx: int) -> Tuple[float, float]:
         sims = [float(np.dot(candidate_embedding, ex)) for ex in self.exemplars]
-        raw_sim = max(sims) if sims else 0.0
+        if not sims:
+            return 0.0, 0.0
+            
+        raw_sim = max(sims)
+        # Multi-exemplar visual agreement across previous clicked images
+        if len(sims) >= 2:
+            sorted_sims = sorted(sims, reverse=True)
+            visual_sim = 0.75 * sorted_sims[0] + 0.25 * sorted_sims[1]
+        else:
+            visual_sim = raw_sim
         
-        # Spatio-temporal continuity prior & occlusion bridging
+        # Local spatio-temporal continuity boost for immediate adjacent frames
         if camera_id == self.last_camera:
             dt = frame_idx - self.last_frame
             dx = center[0] - self.last_center[0]
@@ -137,13 +146,13 @@ class PersonMemory:
             # Trajectory continuity across brief occlusions (e.g. walking behind counters/pillars)
             if dt < 45:
                 if dist < 80:
-                    return raw_sim + 0.20, raw_sim
+                    return visual_sim + 0.20, raw_sim
                 elif dist < 220 and abs(dy) < 60:  # Walking horizontally across background
-                    return raw_sim + 0.18, raw_sim
-            elif dt > 120 and dist > 300:
-                return raw_sim - 0.15, raw_sim
+                    return visual_sim + 0.18, raw_sim
+            # Note: No time-decay or waiting-timer penalty is applied for dt > 120.
+            # Long-term re-identification is driven by pure visual match from previous clicked images.
                 
-        return raw_sim, raw_sim
+        return visual_sim, raw_sim
 
     def get_best_structural(self) -> Optional[np.ndarray]:
         if self.structural_exemplars:
@@ -323,3 +332,37 @@ class ReIDMemoryBank:
         if global_id in self.persons:
             return self.persons[global_id].crops
         return []
+
+    def reidentify_from_image(self, crop: np.ndarray, top_k: int = 5) -> List[Dict[str, Any]]:
+        """
+        Takes an arbitrary clicked or uploaded image crop, extracts its visual embedding,
+        and matches against all learned identities in the memory gallery.
+        Returns top-k matching persons sorted by visual similarity score.
+        """
+        if crop is None or crop.size == 0:
+            return []
+            
+        feat = self.extractor.extract_features([crop])
+        if feat.shape[0] == 0:
+            return []
+            
+        candidate_feat = feat[0]
+        results = []
+        for gid, mem in self.persons.items():
+            sims = [float(np.dot(candidate_feat, ex)) for ex in mem.exemplars]
+            if not sims:
+                continue
+            max_sim = max(sims)
+            avg_top2 = float(np.mean(sorted(sims, reverse=True)[:2])) if len(sims) >= 2 else max_sim
+            score = 0.75 * max_sim + 0.25 * avg_top2
+            results.append({
+                "global_id": gid,
+                "similarity_score": round(score, 4),
+                "confidence_pct": round(score * 100, 1),
+                "last_camera": mem.last_camera,
+                "total_detections": mem.total_detections,
+                "thumbnails": mem.crops
+            })
+            
+        results.sort(key=lambda x: x["similarity_score"], reverse=True)
+        return results[:top_k]

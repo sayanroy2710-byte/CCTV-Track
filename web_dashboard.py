@@ -177,15 +177,20 @@ else:
 
     st.markdown("---")
     
-    # 2. Tabs: Live Visitors, Journey Details, Dwell Time Analytics
-    tab1, tab2, tab3 = st.tabs(["📋 Visitor Directory & Status", "🔍 Person Journey & ReID Gallery", "📊 Dwell Time Analytics"])
+    # 2. Tabs: Live Visitors, Journey Details, Dwell Time Analytics, Click-to-ReID
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📋 Visitor Directory & Status",
+        "🔍 Person Journey & ReID Gallery",
+        "📊 Dwell Time Analytics",
+        "🎯 Click-to-ReID (Visual Search)"
+    ])
     
     with tab1:
         st.subheader("Real-Time Footfall Registry")
         table_df = filtered_df.copy()
         table_df["Entry Time"] = table_df["entry_time"].apply(clean_time_str)
         table_df["Exit Time"] = table_df["exit_time"].apply(clean_time_str)
-        table_df["Status"] = table_df["status"].apply(lambda s: "🟢 INSIDE" if s == "INSIDE" else "🟠 EXITED")
+        table_df["Status"] = table_df["status"].apply(lambda s: "🟢 INSIDE" if s == "INSIDE" else ("🔵 RE-ENTERED" if s == "RE_ENTERED" else "🟠 EXITED"))
         table_df["Dwell Time"] = table_df["dwell_time_str"]
         table_df["Entry Point"] = table_df["entry_camera"]
         table_df["Last Location"] = table_df["last_camera"]
@@ -219,7 +224,7 @@ else:
             c_left, c_right = st.columns([1, 2])
             with c_left:
                 st.markdown(f"### `{person_data['global_id']}`")
-                status_icon = "🟢" if person_data['status'] == "INSIDE" else "🟠"
+                status_icon = "🟢" if person_data['status'] == "INSIDE" else ("🔵" if person_data['status'] == "RE_ENTERED" else "🟠")
                 st.write(f"**Status:** {status_icon} {person_data['status']}")
                 st.write(f"**Entry Time:** {clean_time_str(person_data['entry_time'])}")
                 st.write(f"**Exit Time:** {clean_time_str(person_data['exit_time'])}")
@@ -227,10 +232,10 @@ else:
                 st.write(f"**Entry Camera:** {person_data['entry_camera']}")
                 st.write(f"**Last Camera:** {person_data['last_camera']}")
                 
-                # Show snapshot if available
+                # Show snapshot thumbnail
                 thumb = person_data.get("thumbnail_path", "")
                 if thumb and os.path.exists(thumb):
-                    st.image(Image.open(thumb), caption=f"ReID Snapshot: {person_data['global_id']}", width=180)
+                    st.image(Image.open(thumb), caption=f"Primary Snapshot: {person_data['global_id']}", width=180)
                 else:
                     st.info("No visual crop thumbnail available.")
                     
@@ -253,6 +258,22 @@ else:
                     }))
                 else:
                     st.write("No granular transition events logged yet.")
+            
+            # Display all learned crops (previous and current clicked images)
+            st.markdown("---")
+            st.markdown("#### 📸 Learned Visual Memory (Previous & Current Clicked Images)")
+            all_person_crops = sorted(list(config.CROPS_DIR.glob(f"{selected_gid}*.jpg")))
+            if all_person_crops:
+                cols_img = st.columns(min(len(all_person_crops), 5))
+                for idx, cpath in enumerate(all_person_crops):
+                    with cols_img[idx % 5]:
+                        label = "Current View" if idx == len(all_person_crops) - 1 else f"Previous #{idx + 1}"
+                        try:
+                            st.image(Image.open(cpath), caption=f"{label}\n({cpath.name})", use_container_width=True)
+                        except Exception:
+                            pass
+            else:
+                st.info("No gallery crops stored yet for this identity.")
 
     with tab3:
         st.subheader("Visitor Dwell Time Analytics")
@@ -268,7 +289,7 @@ else:
             
             st.markdown("#### Detailed Dwell Breakdown Table")
             summary_cols = chart_df[["global_id", "status", "dwell_time_str", "dwell_time_seconds", "total_detections"]].copy()
-            summary_cols["Status"] = summary_cols["status"].apply(lambda s: "🟢 INSIDE" if s == "INSIDE" else "🟠 EXITED")
+            summary_cols["Status"] = summary_cols["status"].apply(lambda s: "🟢 INSIDE" if s == "INSIDE" else ("🔵 RE-ENTERED" if s == "RE_ENTERED" else "🟠 EXITED"))
             st.dataframe(
                 summary_cols.rename(columns={
                     "global_id": "Visitor ID",
@@ -280,3 +301,103 @@ else:
                 use_container_width=True,
                 hide_index=True
             )
+
+    with tab4:
+        st.subheader("🎯 Click-to-ReID: Instant Visual Search & Re-Identification")
+        st.caption("Re-identify individuals across all cameras and historical visits using learned appearance from previous and current clicked images — with zero waiting timer constraints.")
+        
+        reid_col1, reid_col2 = st.columns([1, 2])
+        query_crop_img = None
+        
+        with reid_col1:
+            st.markdown("##### 1. Select Query Image")
+            query_mode = st.radio("Query Source:", ["Select from Clicked Gallery", "Upload New Photo/Crop"], horizontal=True)
+            
+            if query_mode == "Select from Clicked Gallery":
+                all_available_crops = sorted(list(config.CROPS_DIR.glob("*.jpg")))
+                if all_available_crops:
+                    crop_options = {c.name: c for c in all_available_crops}
+                    chosen_crop_name = st.selectbox("Choose a Clicked Crop:", list(crop_options.keys()))
+                    if chosen_crop_name:
+                        chosen_path = crop_options[chosen_crop_name]
+                        query_crop_img = Image.open(chosen_path)
+                        st.image(query_crop_img, caption=f"Selected Query: {chosen_crop_name}", width=180)
+                else:
+                    st.info("No clicked crops available in database yet.")
+            else:
+                uploaded_file = st.file_uploader("Upload Person Crop:", type=["jpg", "jpeg", "png"])
+                if uploaded_file is not None:
+                    query_crop_img = Image.open(uploaded_file)
+                    st.image(query_crop_img, caption="Uploaded Query Image", width=180)
+                    
+            search_btn = st.button("🔍 Search & Re-Identify Across All Footage", type="primary")
+
+        with reid_col2:
+            st.markdown("##### 2. Visual Re-Identification Results")
+            if search_btn and query_crop_img is not None:
+                with st.spinner("Extracting Deep ReID visual embeddings and matching against learned gallery..."):
+                    import cv2
+                    import numpy as np
+                    from core.reid import DeepReIDExtractor
+                    
+                    query_np = cv2.cvtColor(np.array(query_crop_img), cv2.COLOR_RGB2BGR)
+                    extractor = DeepReIDExtractor()
+                    q_feat = extractor.extract_features([query_np])
+                    
+                    if q_feat.shape[0] == 0:
+                        st.error("Failed to extract features from query image.")
+                    else:
+                        cand_feat = q_feat[0]
+                        ranked_matches = []
+                        for gid in df_visitors["global_id"].unique():
+                            crops = sorted(list(config.CROPS_DIR.glob(f"{gid}*.jpg")))
+                            if not crops:
+                                continue
+                            crop_imgs = [cv2.imread(str(p)) for p in crops if os.path.exists(str(p))]
+                            crop_imgs = [ci for ci in crop_imgs if ci is not None and ci.size > 0]
+                            if not crop_imgs:
+                                continue
+                            c_feats = extractor.extract_features(crop_imgs)
+                            if c_feats.shape[0] == 0:
+                                continue
+                            sims = [float(np.dot(cand_feat, ex)) for ex in c_feats]
+                            max_sim = max(sims)
+                            top2_sim = float(np.mean(sorted(sims, reverse=True)[:2])) if len(sims) >= 2 else max_sim
+                            score = 0.75 * max_sim + 0.25 * top2_sim
+                            
+                            v_info = df_visitors[df_visitors["global_id"] == gid].iloc[0]
+                            ranked_matches.append({
+                                "global_id": gid,
+                                "score": score,
+                                "conf_pct": round(score * 100, 1),
+                                "status": v_info["status"],
+                                "entry_time": clean_time_str(v_info["entry_time"]),
+                                "last_camera": v_info["last_camera"],
+                                "best_crop": str(crops[int(np.argmax(sims))])
+                            })
+                            
+                        ranked_matches.sort(key=lambda x: x["score"], reverse=True)
+                        
+                        if ranked_matches:
+                            top_m = ranked_matches[0]
+                            if top_m["score"] >= config.REID_SIMILARITY_THRESHOLD:
+                                st.success(f"🎯 **CONFIRMED RE-IDENTIFICATION**: Matches `{top_m['global_id']}` ({top_m['conf_pct']}% Visual Similarity)")
+                            else:
+                                st.warning(f"⚠️ Tentative Match: `{top_m['global_id']}` ({top_m['conf_pct']}% Visual Similarity)")
+                                
+                            for idx, m in enumerate(ranked_matches[:3]):
+                                with st.expander(f"Rank #{idx+1}: {m['global_id']} — {m['conf_pct']}% Match", expanded=(idx==0)):
+                                    rc1, rc2 = st.columns([1, 2])
+                                    with rc1:
+                                        if os.path.exists(m["best_crop"]):
+                                            st.image(Image.open(m["best_crop"]), caption=f"Learned Gallery Match: {m['global_id']}", width=140)
+                                    with rc2:
+                                        st.write(f"**Global ID:** `{m['global_id']}`")
+                                        st.write(f"**Visual Match Score:** `{m['score']:.4f}` ({m['conf_pct']}%)")
+                                        st.write(f"**Status:** {m['status']}")
+                                        st.write(f"**First Seen:** {m['entry_time']}")
+                                        st.write(f"**Last Camera Location:** `{m['last_camera']}`")
+                        else:
+                            st.info("No enrolled identities found in database.")
+            elif not search_btn:
+                st.info("Select or upload a person crop on the left and click 'Search & Re-Identify' to find their matching identity.")

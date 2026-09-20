@@ -114,6 +114,27 @@ class JourneyManager:
                 self.recent_events.append({"time": now.strftime('%H:%M:%S'), "text": msg, "type": "TRANSITION", "id": global_id})
                 self._db_insert_event(global_id, camera_id, now, event_type, bbox)
 
+        elif global_id in self.completed_visitors:
+            # Re-identified visitor returning! Reactivate from completed to active
+            record = self.completed_visitors.pop(global_id)
+            record.last_seen_time = now
+            record.exit_time = None
+            record.status = "RE_ENTERED"
+            record.total_detections += 1
+            if thumbnail_path and not record.thumbnail_path:
+                record.thumbnail_path = thumbnail_path
+            if camera_id not in record.camera_path:
+                record.camera_path.append(camera_id)
+            record.last_camera = camera_id
+            self.active_visitors[global_id] = record
+            
+            event_type = "RE_ENTRY"
+            msg = f"{global_id} RE-ENTERED at {camera_id} [{now.strftime('%H:%M:%S')}] (Visual ReID)"
+            self.recent_events.append({"time": now.strftime('%H:%M:%S'), "text": msg, "type": "RE_ENTRY", "id": global_id})
+            
+            self._db_update_visitor(record)
+            self._db_insert_event(global_id, camera_id, now, event_type, bbox)
+
         if len(self.recent_events) > 30:
             self.recent_events.pop(0)
 

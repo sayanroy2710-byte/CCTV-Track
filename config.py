@@ -29,8 +29,8 @@ MIN_PERSON_AREA = 1500               # Discard tiny reflection/shelf noise while
 REID_BACKBONE = "mobilenet_v3_small"
 REID_SIMILARITY_THRESHOLD = 0.68     # High-precision multi-exemplar threshold
 REID_FEATURE_ALPHA = 0.85            # Momentum update for feature gallery
-MAX_EXEMPLARS_PER_PERSON = 5         # Viewpoint templates per person
-MAX_GALLERY_IMAGES_PER_PERSON = 4    # Crops stored per person
+MAX_EXEMPLARS_PER_PERSON = 8         # Diverse viewpoint templates learned per person
+MAX_GALLERY_IMAGES_PER_PERSON = 8    # Clicked/captured crops stored in gallery per person
 
 # Pose Estimation & Multi-Cue Fusion Parameters
 ENABLE_POSE_ESTIMATION = True        # Enable YOLO11-Pose for keypoints & ground anchoring

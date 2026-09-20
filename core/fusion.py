@@ -66,15 +66,19 @@ class MultiCueFusionEngine:
             # Trust motion heavily for frame-to-frame smoothness
             w_mot, w_app, w_struct = 0.45, 0.40, 0.15
             strategy = "continuous_tracking"
+        elif dt_frames > 25:
+            # Case B1: Re-entry, long absence, or cross-camera transition
+            # Motion has zero bearing; appearance learned from previous clicked images is decisive
+            w_mot, w_app, w_struct = 0.00, 0.80, 0.20
+            strategy = "visual_reidentification"
         elif dt_frames > 5 and ambiguity_margin >= 0.08:
-            # Case B: Recovery from brief occlusion / lost track
-            # Motion prediction is degraded; appearance is the primary recovery anchor
-            w_mot, w_app, w_struct = 0.15, 0.55, 0.30
+            # Case B2: Recovery from brief occlusion (walking behind pillar/counter)
+            w_mot, w_app, w_struct = 0.10, 0.65, 0.25
             strategy = "occlusion_recovery"
         else:
-            # Case C: Ambiguous appearance (e.g. multiple people in similar clothing)
+            # Case C: Ambiguous appearance (multiple people in similar clothing)
             # Fall back on physical body proportions and structural pose geometry
-            w_mot, w_app, w_struct = 0.20, 0.35, 0.45
+            w_mot, w_app, w_struct = 0.10, 0.45, 0.45
             strategy = "ambiguity_fallback"
             
         # Normalize weights
