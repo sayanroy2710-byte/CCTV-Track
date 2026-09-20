@@ -128,7 +128,8 @@ def main():
             args.loop = gui_cfg.get("loop", args.loop)
             args.model = gui_cfg.get("model", args.model)
             args.conf = gui_cfg.get("conf", args.conf)
-            args.exit_timeout = gui_cfg.get("exit_timeout", getattr(args, "exit_timeout", config.EXIT_TIMEOUT_SECONDS))
+            if "reid_thresh" in gui_cfg:
+                config.REID_SIMILARITY_THRESHOLD = gui_cfg["reid_thresh"]
         except Exception as e:
             print(f"[WARNING] Rich GUI selector encountered an issue: {e}")
             print("[INFO] Launching fallback Windows file selector...")

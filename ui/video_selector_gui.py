@@ -255,12 +255,20 @@ class VideoSelectorGUI:
         self.spin_conf = ttk.Spinbox(grid, from_=0.15, to=0.80, increment=0.02, textvariable=self.conf_var, width=6)
         self.spin_conf.grid(row=0, column=3, sticky="w", pady=4)
 
-        lbl_timeout = tk.Label(grid, text="Exit Waiting Timer (s):", bg="#1e293b", fg="#cbd5e1", font=("Segoe UI", 9))
-        lbl_timeout.grid(row=1, column=0, sticky="w", pady=4, padx=(0, 6))
+        lbl_reid = tk.Label(grid, text="ReID Record Matching:", bg="#1e293b", fg="#cbd5e1", font=("Segoe UI", 9))
+        lbl_reid.grid(row=1, column=0, sticky="w", pady=4, padx=(0, 6))
 
-        self.timeout_var = tk.DoubleVar(value=config.EXIT_TIMEOUT_SECONDS)
-        self.spin_timeout = ttk.Spinbox(grid, from_=1.0, to=120.0, increment=1.0, textvariable=self.timeout_var, width=18)
-        self.spin_timeout.grid(row=1, column=1, sticky="w", pady=4, padx=(0, 20))
+        self.reid_match_var = tk.StringVar(value="Active (Match Previous Records)")
+        lbl_reid_status = tk.Label(grid, textvariable=self.reid_match_var, bg="#0f172a", fg="#38bdf8",
+                                   font=("Segoe UI", 9, "bold"), padx=8, pady=2, relief="solid", bd=1)
+        lbl_reid_status.grid(row=1, column=1, sticky="w", pady=4, padx=(0, 20))
+
+        lbl_sim = tk.Label(grid, text="ReID Sensitivity:", bg="#1e293b", fg="#cbd5e1", font=("Segoe UI", 9))
+        lbl_sim.grid(row=1, column=2, sticky="w", pady=4, padx=(0, 6))
+
+        self.sim_var = tk.DoubleVar(value=config.REID_SIMILARITY_THRESHOLD)
+        self.spin_sim = ttk.Spinbox(grid, from_=0.50, to=0.90, increment=0.02, textvariable=self.sim_var, width=6)
+        self.spin_sim.grid(row=1, column=3, sticky="w", pady=4)
 
         check_row = tk.Frame(card, bg="#1e293b", padx=16, pady=6)
         check_row.pack(fill="x", pady=(0, 6))
@@ -339,7 +347,7 @@ class VideoSelectorGUI:
             "loop": self.loop_var.get(),
             "model": model_path,
             "conf": float(self.conf_var.get()),
-            "exit_timeout": float(self.timeout_var.get()),
+            "reid_thresh": float(self.sim_var.get()),
         }
         self.root.destroy()
 
